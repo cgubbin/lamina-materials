@@ -30,6 +30,50 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "91622ff5e7162018101f2fea40d6ebf4a78bbe5a49736a2020649edf9693679e"
 
 [[package]]
+name = "itertools"
+version = "0.15.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8b4baf93f58d4425749ca49a51c50ebab072c5df6994d08fed93541c331481dc"
+dependencies = [
+ "either",
+]
+
+[[package]]
+name = "lamina-core"
+version = "0.1.0"
+dependencies = [
+ "either",
+ "itertools",
+ "lamina-units",
+ "nalgebra",
+ "ndarray",
+ "num-complex",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
+name = "lamina-materials"
+version = "0.1.0"
+dependencies = [
+ "approx",
+ "lamina-core",
+ "lamina-units",
+ "ndarray",
+ "num-complex",
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
+name = "lamina-units"
+version = "0.1.0"
+dependencies = [
+ "num-traits",
+ "thiserror",
+]
+
+[[package]]
 name = "matrixmultiply"
 version = "0.3.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -63,7 +107,7 @@ checksum = "254a5372af8fc138e36684761d3c0cdb758a4410e938babcff1c860ce14ddbfc"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
+ "syn 2.0.119",
 ]
 
 [[package]]
@@ -208,47 +252,34 @@ dependencies = [
 ]
 
 [[package]]
-name = "thiserror"
-version = "2.0.18"
+name = "syn"
+version = "3.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4288b5bcbc7920c07a1149a35cf9590a2aa808e0bc1eafaade0b80947865fbc4"
+checksum = "53e9bae58849f64dfa4f5d5ae372c8341f7305f82a3868709269343628b659a3"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "unicode-ident",
+]
+
+[[package]]
+name = "thiserror"
+version = "2.0.19"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "09a43598840e33d5b0331f38c5e30d13bb11c11210a4b58f0d9b18a5a5eefcd9"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "2.0.18"
+version = "2.0.19"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "ebc4ee7f67670e9b64d05fa4253e753e016c6c95ff35b89b7941d6b856dec1d5"
+checksum = "43cbfe0cf76104d42a574802844187e84a305e531ed54455f11fbde0f10541cd"
 dependencies = [
  "proc-macro2",
  "quote",
- "syn",
-]
-
-[[package]]
-name = "tmm-core"
-version = "0.1.0"
-dependencies = [
- "either",
- "nalgebra",
- "ndarray",
- "num-complex",
- "num-traits",
- "thiserror",
-]
-
-[[package]]
-name = "tmm-materials"
-version = "0.1.0"
-dependencies = [
- "approx",
- "ndarray",
- "num-complex",
- "num-traits",
- "thiserror",
- "tmm-core",
+ "syn 3.0.3",
 ]
 
 [[package]]

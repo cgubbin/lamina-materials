@@ -1,9 +1,9 @@
-use ndarray::array;
-use num_complex::Complex64;
-use tmm_materials::{
+use lamina_materials::{
     Cauchy, Drude, Extrapolation, LorentzOscillator, MaterialModelError, SellmeierTerm, Tabulated,
     TabulatedMaterialError,
 };
+use ndarray::array;
+use num_complex::Complex64;
 
 #[test]
 fn negative_drude_plasma_wavenumber_is_rejected() {

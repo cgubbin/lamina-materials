@@ -1,12 +1,20 @@
-//! Optical material models for the `tmm` ecosystem.
+//! Optical material models for the `lamina` ecosystem.
 //!
-//! Analytical models implement the material capability traits from `tmm-core`.
+//! Analytical models implement the material capability traits from `lamina-core`.
 //! Tabulated optical data implements only real-axis evaluation because a
 //! real-axis interpolation does not define a physically meaningful complex
 //! continuation.
 //!
-//! The spectral coordinate is vacuum angular wavenumber,
-//! `k₀ = ω / c = 2π / λ₀`. Model parameters must use consistent units.
+//! # Spectral convention
+//!
+//! The canonical spectral coordinate is the vacuum angular wavenumber
+//!
+//! `k₀ = ω / c = 2π / λ₀`,
+//!
+//! expressed in inverse centimetres (`cm⁻¹`). Spectral material parameters are
+//! expressed in units consistent with this coordinate unless explicitly stated
+//! otherwise. Constructors accepting wavelength-domain parameters convert them
+//! to the canonical inverse-centimetre representation.
 
 pub mod database;
 pub mod error;
@@ -20,4 +28,7 @@ pub use model::{
     Cauchy, Drude, DrudeLorentz, Extrapolation, Lorentz, LorentzOscillator, Sellmeier,
     SellmeierTerm, Tabulated,
 };
-pub use units::{LengthUnit, Wavelength};
+pub use units::{
+    AngularFrequency, Frequency, ToCanonicalSpectral, ToCanonicalSpectralSquared,
+    VacuumAngularWavenumber, VacuumWavenumber, Wavelength,
+};

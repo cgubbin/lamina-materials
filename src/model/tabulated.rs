@@ -1,11 +1,11 @@
 //! Tabulated real-axis complex-permittivity model.
 
 use crate::TabulatedMaterialError;
+use lamina_core::{ComplexScalar, Material, Sampled};
 use ndarray::Array1;
 use num_complex::Complex;
 use num_traits::Float;
 use std::fmt::Debug;
-use tmm_core::{ComplexScalar, Material, Sampled};
 
 /// Extrapolation policy for tabulated constitutive data.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -18,9 +18,14 @@ pub enum Extrapolation {
     Linear,
 }
 
-/// Piecewise-linear tabulated relative permittivity.
+/// Piecewise-linear tabulated relative-permittivity model.
 ///
-/// This type intentionally implements only [`Material`].
+/// Tabulated coordinates are vacuum angular wavenumbers in inverse centimetres
+/// (`cm⁻¹`), and values are dimensionless complex relative permittivities.
+///
+/// This type intentionally implements only [`Material`]. Real-axis
+/// interpolation does not define a physically meaningful meromorphic
+/// continuation or intrinsic dispersive derivative contract.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tabulated<R> {
     vacuum_wavenumber: Array1<R>,
@@ -33,6 +38,10 @@ where
     R: Float + Debug,
 {
     /// Construct validated tabulated constitutive data.
+    ///
+    /// `vacuum_wavenumber` contains strictly increasing canonical vacuum angular
+    /// wavenumbers in inverse centimetres (`cm⁻¹`). `relative_permittivity` contains
+    /// the corresponding dimensionless complex relative permittivities.
     pub fn new(
         vacuum_wavenumber: Array1<R>,
         relative_permittivity: Array1<Complex<R>>,

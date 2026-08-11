@@ -1,9 +1,9 @@
 use ndarray::{Array1, Array2, array};
 use num_complex::Complex64;
 
-use tmm_core::{Material, MeromorphicMaterial};
+use lamina_core::{Material, MeromorphicMaterial};
 
-use tmm_materials::Drude;
+use lamina_materials::Drude;
 
 fn material() -> Drude<f64> {
     Drude::new(1.0, 2.0, 0.1).unwrap()

@@ -1,16 +1,23 @@
 //! Combined Drude–Lorentz model.
 
 use crate::{MaterialModelError, model::LorentzOscillator};
+use lamina_core::{
+    ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
+    Material, MeromorphicMaterial, Sampled,
+};
 use num_traits::Float;
 use std::fmt::Debug;
-use tmm_core::{
-    ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
-    Material, MeromorphicMaterial, Sampled, SpectralVariable,
-};
 
 /// Combined Drude–Lorentz relative-permittivity model.
 ///
-/// `ε(k₀) = ε∞ - Ωᴅ²/(k₀²+iΓᴅk₀) + Σ Sⱼ/(Ωⱼ²-k₀²-iΓⱼk₀)`.
+/// The model is
+///
+/// `ε(k₀) = ε∞ - Ωᴅ²/(k₀² + iΓᴅk₀)
+///          + Σ Sⱼ/(Ωⱼ² - k₀² - iΓⱼk₀)`.
+///
+/// All angular wavenumbers are expressed in inverse centimetres (`cm⁻¹`).
+/// Consequently, the primitive Drude strength `Ωᴅ²` and Lorentz oscillator
+/// strengths `Sⱼ` have units of `cm⁻²`. `ε∞` is dimensionless.
 #[derive(Clone, Debug, PartialEq)]
 pub struct DrudeLorentz<R> {
     epsilon_infinity: R,
@@ -23,7 +30,11 @@ impl<R> DrudeLorentz<R>
 where
     R: Float + Debug,
 {
-    /// Construct from primitive Drude strength `Ωᴅ²`.
+    /// Construct from primitive Drude strength.
+    ///
+    /// `epsilon_infinity` is dimensionless. `drude_strength` has units of `cm⁻²`,
+    /// `drude_damping` has units of `cm⁻¹`, and each oscillator must use the same
+    /// canonical inverse-centimetre convention.
     pub fn new(
         epsilon_infinity: R,
         drude_strength: R,
@@ -42,7 +53,11 @@ where
         })
     }
 
-    /// Construct from plasma wavenumber `Ωᴅ`.
+    /// Construct from the Drude plasma angular wavenumber.
+    ///
+    /// `epsilon_infinity` is dimensionless. `plasma_wavenumber` and
+    /// `drude_damping` are expressed in inverse centimetres (`cm⁻¹`).
+    /// The primitive Drude strength is `Ωᴅ²`.
     pub fn from_plasma_wavenumber(
         epsilon_infinity: R,
         plasma_wavenumber: R,
@@ -59,6 +74,9 @@ where
     }
 
     /// Construct a Lorentz-only model.
+    ///
+    /// `epsilon_infinity` is dimensionless. Oscillator spectral parameters use
+    /// the canonical inverse-centimetre convention.
     pub fn lorentz_only(
         epsilon_infinity: R,
         oscillators: Vec<LorentzOscillator<R>>,
@@ -66,27 +84,27 @@ where
         Self::new(epsilon_infinity, R::zero(), R::zero(), oscillators)
     }
 
-    /// Return high-frequency permittivity.
+    /// Return the dimensionless high-frequency relative permittivity.
     pub fn epsilon_infinity(&self) -> R {
         self.epsilon_infinity
     }
 
-    /// Return primitive Drude strength `Ωᴅ²`.
+    /// Return the primitive Drude strength `Ωᴅ²` in `cm⁻²`.
     pub fn drude_strength(&self) -> R {
         self.drude_strength
     }
 
-    /// Return plasma wavenumber.
+    /// Return the plasma angular wavenumber in inverse centimetres (`cm⁻¹`).
     pub fn plasma_wavenumber(&self) -> R {
         self.drude_strength.sqrt()
     }
 
-    /// Return Drude damping.
+    /// Return the Drude damping angular wavenumber in inverse centimetres (`cm⁻¹`).
     pub fn drude_damping(&self) -> R {
         self.drude_damping
     }
 
-    /// Return Lorentz oscillators.
+    /// Return the Lorentz oscillator terms.
     pub fn oscillators(&self) -> &[LorentzOscillator<R>] {
         &self.oscillators
     }
@@ -108,26 +126,21 @@ where
         epsilon
     }
 
-    fn derivative_at<C>(&self, k0: C, order: DerivativeOrder, variable: SpectralVariable) -> C
+    fn derivative_at<C>(&self, k0: C, order: DerivativeOrder) -> C
     where
         C: ComplexScalar<RealField = R> + Copy,
     {
-        let mut first = C::zero();
-        let mut second = C::zero();
+        let mut derivative = C::zero();
 
         if self.drude_strength > R::zero() {
-            let (a, b) = self.drude_derivatives(k0);
-            first = first + a;
-            second = second + b;
+            derivative = derivative + self.drude_derivative_at(k0, order);
         }
 
         for oscillator in &self.oscillators {
-            let (a, b) = oscillator.derivatives_at(k0);
-            first = first + a;
-            second = second + b;
+            derivative = derivative + oscillator.derivative_at(k0, order);
         }
 
-        convert_derivative_variable(k0, first, second, order, variable)
+        derivative
     }
 
     fn drude_value<C>(&self, k0: C) -> C
@@ -139,7 +152,7 @@ where
         -C::from_real(self.drude_strength) / denominator
     }
 
-    fn drude_derivatives<C>(&self, k0: C) -> (C, C)
+    fn drude_derivative_at<C>(&self, k0: C, order: DerivativeOrder) -> C
     where
         C: ComplexScalar<RealField = R> + Copy,
     {
@@ -147,13 +160,20 @@ where
         let igamma = C::i() * C::from_real(self.drude_damping);
         let d = k0 * k0 + igamma * k0;
         let d1 = two * k0 + igamma;
-        let d2 = two;
         let strength = C::from_real(self.drude_strength);
 
-        let first = strength * d1 / (d * d);
-        let second = strength * (d2 * d - two * d1 * d1) / (d * d * d);
-
-        (first, second)
+        match order {
+            DerivativeOrder::First => strength * d1 / (d * d),
+            DerivativeOrder::Second => {
+                let d2 = two;
+                strength * (d2 * d - two * d1 * d1) / (d * d * d)
+            }
+            DerivativeOrder::Third => {
+                let d2 = two;
+                let six = two + two + two;
+                six * strength * d1 * (d1 * d1 - d2 * d) / (d * d * d * d)
+            }
+        }
     }
 }
 
@@ -188,13 +208,12 @@ where
         &self,
         vacuum_wavenumber: I,
         order: DerivativeOrder,
-        variable: SpectralVariable,
     ) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = R>,
     {
-        vacuum_wavenumber.map(|k0| self.derivative_at::<C>(C::from_real(k0), order, variable))
+        vacuum_wavenumber.map(|k0| self.derivative_at::<C>(C::from_real(k0), order))
     }
 }
 
@@ -227,38 +246,12 @@ where
         &self,
         vacuum_wavenumber: I,
         order: DerivativeOrder,
-        variable: SpectralVariable,
     ) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = C>,
     {
-        vacuum_wavenumber.map(|k0| self.derivative_at(k0, order, variable))
-    }
-}
-
-pub(crate) fn convert_derivative_variable<C>(
-    k0: C,
-    first_k0: C,
-    second_k0: C,
-    order: DerivativeOrder,
-    variable: SpectralVariable,
-) -> C
-where
-    C: ComplexScalar + Copy,
-{
-    match (order, variable) {
-        (DerivativeOrder::First, SpectralVariable::VacuumWavenumber) => first_k0,
-        (DerivativeOrder::Second, SpectralVariable::VacuumWavenumber) => second_k0,
-        (DerivativeOrder::First, SpectralVariable::VacuumWavenumberSquared) => {
-            let two = C::from_real(C::one().real() + C::one().real());
-            first_k0 / (two * k0)
-        }
-        (DerivativeOrder::Second, SpectralVariable::VacuumWavenumberSquared) => {
-            let two = C::from_real(C::one().real() + C::one().real());
-            let four = two + two;
-            second_k0 / (four * k0 * k0) - first_k0 / (four * k0 * k0 * k0)
-        }
+        vacuum_wavenumber.map(|k0| self.derivative_at(k0, order))
     }
 }
 
@@ -281,4 +274,123 @@ where
         return Err(MaterialModelError::NegativeParameter { name, value });
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use num_complex::Complex64;
+
+    const TOLERANCE: f64 = 1e-12;
+
+    fn assert_complex_close(actual: Complex64, expected: Complex64) {
+        let error = (actual - expected).norm();
+        let scale = expected.norm().max(1.0);
+
+        assert!(
+            error <= TOLERANCE * scale,
+            "actual = {actual:?}, expected = {expected:?}, relative error = {}",
+            error / scale
+        );
+    }
+
+    #[test]
+    fn drude_value_matches_closed_form() {
+        let strength = 2.1;
+        let damping = 0.4;
+
+        let model = DrudeLorentz::new(1.0, strength, damping, Vec::new()).unwrap();
+
+        let k0 = Complex64::new(1.3, 0.1);
+
+        let d = k0 * k0 + Complex64::i() * damping * k0;
+        let expected = -strength / d;
+
+        assert_complex_close(model.drude_value(k0), expected);
+    }
+
+    #[test]
+    fn drude_first_derivative_matches_closed_form() {
+        let strength = 2.1;
+        let damping = 0.4;
+
+        let model = DrudeLorentz::new(1.0, strength, damping, Vec::new()).unwrap();
+
+        let k0 = Complex64::new(1.3, 0.1);
+
+        let igamma = Complex64::i() * damping;
+        let d = k0 * k0 + igamma * k0;
+        let d1 = 2.0 * k0 + igamma;
+
+        let expected = strength * d1 / (d * d);
+
+        assert_complex_close(
+            model.drude_derivative_at(k0, DerivativeOrder::First),
+            expected,
+        );
+    }
+
+    #[test]
+    fn drude_second_derivative_matches_closed_form() {
+        let strength = 2.1;
+        let damping = 0.4;
+
+        let model = DrudeLorentz::new(1.0, strength, damping, Vec::new()).unwrap();
+
+        let k0 = Complex64::new(1.3, 0.1);
+
+        let igamma = Complex64::i() * damping;
+        let d = k0 * k0 + igamma * k0;
+        let d1 = 2.0 * k0 + igamma;
+        let d2 = Complex64::new(2.0, 0.0);
+
+        let expected = strength * (d2 * d - 2.0 * d1 * d1) / (d * d * d);
+
+        assert_complex_close(
+            model.drude_derivative_at(k0, DerivativeOrder::Second),
+            expected,
+        );
+    }
+
+    #[test]
+    fn drude_third_derivative_matches_closed_form() {
+        let strength = 2.1;
+        let damping = 0.4;
+
+        let model = DrudeLorentz::new(1.0, strength, damping, Vec::new()).unwrap();
+
+        let k0 = Complex64::new(1.3, 0.1);
+
+        let igamma = Complex64::i() * damping;
+        let d = k0 * k0 + igamma * k0;
+        let d1 = 2.0 * k0 + igamma;
+        let d2 = Complex64::new(2.0, 0.0);
+
+        let expected = 6.0 * strength * d1 * (d1 * d1 - d2 * d) / (d * d * d * d);
+
+        assert_complex_close(
+            model.drude_derivative_at(k0, DerivativeOrder::Third),
+            expected,
+        );
+    }
+
+    #[test]
+    fn drude_lorentz_derivative_is_sum_of_requested_contributions() {
+        let oscillator = LorentzOscillator::new(0.8, 2.7, 0.25).unwrap();
+
+        let model = DrudeLorentz::new(1.4, 1.9, 0.3, vec![oscillator]).unwrap();
+
+        let k0 = Complex64::new(1.1, 0.2);
+
+        for order in [
+            DerivativeOrder::First,
+            DerivativeOrder::Second,
+            DerivativeOrder::Third,
+        ] {
+            let expected =
+                model.drude_derivative_at(k0, order) + oscillator.derivative_at(k0, order);
+
+            assert_complex_close(model.derivative_at(k0, order), expected);
+        }
+    }
 }

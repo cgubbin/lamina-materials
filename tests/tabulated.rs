@@ -1,8 +1,8 @@
 use approx::assert_relative_eq;
+use lamina_core::{Material, Scalar};
+use lamina_materials::{Extrapolation, Tabulated};
 use ndarray::array;
 use num_complex::Complex64;
-use tmm_core::{Material, Scalar};
-use tmm_materials::{Extrapolation, Tabulated};
 
 fn table(extrapolation: Extrapolation) -> Tabulated<f64> {
     Tabulated::new(

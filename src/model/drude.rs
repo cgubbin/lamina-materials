@@ -7,9 +7,16 @@ use crate::{
 use num_traits::Float;
 use std::fmt::Debug;
 
-/// Drude relative-permittivity model.
+/// Drude free-carrier relative-permittivity model.
 ///
-/// `ε(k₀) = ε∞ - Ωᴅ² / (k₀² + i Γᴅ k₀)`.
+/// The model is
+///
+/// `ε(k₀) = ε∞ - Ωᴅ² / (k₀² + i Γᴅ k₀)`,
+///
+/// where `k₀`, the plasma angular wavenumber `Ωᴅ`, and the damping angular
+/// wavenumber `Γᴅ` are expressed in inverse centimetres (`cm⁻¹`).
+///
+/// `ε∞` is dimensionless.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Drude<R> {
     pub(crate) inner: DrudeLorentz<R>,
@@ -19,7 +26,11 @@ impl<R> Drude<R>
 where
     R: Float + Debug,
 {
-    /// Construct from high-frequency permittivity, plasma wavenumber, and damping.
+    /// Construct a Drude model.
+    ///
+    /// `epsilon_infinity` is the dimensionless high-frequency relative
+    /// permittivity. `plasma_wavenumber` and `damping` are expressed in inverse
+    /// centimetres (`cm⁻¹`).
     pub fn new(
         epsilon_infinity: R,
         plasma_wavenumber: R,
@@ -35,17 +46,17 @@ where
         })
     }
 
-    /// Return the high-frequency permittivity.
+    /// Return the dimensionless high-frequency relative permittivity.
     pub fn epsilon_infinity(&self) -> R {
         self.inner.epsilon_infinity()
     }
 
-    /// Return the plasma wavenumber.
+    /// Return the plasma angular wavenumber in inverse centimetres (`cm⁻¹`).
     pub fn plasma_wavenumber(&self) -> R {
         self.inner.plasma_wavenumber()
     }
 
-    /// Return the damping wavenumber.
+    /// Return the damping angular wavenumber in inverse centimetres (`cm⁻¹`).
     pub fn damping(&self) -> R {
         self.inner.drude_damping()
     }

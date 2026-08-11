@@ -1,4 +1,4 @@
-use crate::{LengthUnit, MaterialRecord, Sellmeier, SellmeierTerm, SpectralDomain, Wavelength};
+use crate::{MaterialRecord, Sellmeier, SellmeierTerm, SpectralDomain, Wavelength};
 use num_traits::{Float, FloatConst, FromPrimitive};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -19,7 +19,7 @@ where
         let term = |b: f64, pole_um: f64| {
             SellmeierTerm::from_wavelength_pole(
                 R::from_f64(b).unwrap(),
-                Wavelength::new(R::from_f64(pole_um).unwrap(), LengthUnit::Micrometre).unwrap(),
+                Wavelength::micrometres(R::from_f64(pole_um).unwrap()),
             )
             .unwrap()
         };

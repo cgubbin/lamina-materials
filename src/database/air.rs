@@ -1,7 +1,7 @@
 use crate::{MaterialRecord, SpectralDomain};
+use lamina_core::Constant;
 use num_traits::Float;
 use std::marker::PhantomData;
-use tmm_core::Constant;
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct Air<R> {

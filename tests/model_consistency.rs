@@ -1,12 +1,12 @@
 use approx::assert_relative_eq;
-use num_complex::Complex64;
-use tmm_core::{
+use lamina_core::{
     DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial, Material,
-    MeromorphicMaterial, Scalar, SpectralVariable,
+    MeromorphicMaterial, Scalar,
 };
-use tmm_materials::{
+use lamina_materials::{
     Cauchy, Drude, DrudeLorentz, Lorentz, LorentzOscillator, Sellmeier, SellmeierTerm,
 };
+use num_complex::Complex64;
 
 fn assert_complex_close(left: Complex64, right: Complex64, relative: f64, absolute: f64) {
     assert_relative_eq!(
@@ -30,16 +30,11 @@ where
     material.relative_permittivity::<_, Complex64>(Scalar(k0))
 }
 
-fn derivative<M>(
-    material: &M,
-    k0: f64,
-    order: DerivativeOrder,
-    variable: SpectralVariable,
-) -> Complex64
+fn derivative<M>(material: &M, k0: f64, order: DerivativeOrder) -> Complex64
 where
     M: Material<Real = f64> + DifferentiableMaterial,
 {
-    material.relative_permittivity_derivative::<_, Complex64>(Scalar(k0), order, variable)
+    material.relative_permittivity_derivative::<_, Complex64>(Scalar(k0), order)
 }
 
 fn check_real_complex_consistency<M>(material: &M, k0: f64)
@@ -55,19 +50,11 @@ where
     assert_complex_close(real, complex, 1.0e-12, 1.0e-12);
 
     for order in [DerivativeOrder::First, DerivativeOrder::Second] {
-        for variable in [
-            SpectralVariable::VacuumWavenumber,
-            SpectralVariable::VacuumWavenumberSquared,
-        ] {
-            let real = derivative(material, k0, order, variable);
-            let complex = material.relative_permittivity_complex_derivative(
-                Scalar(Complex64::new(k0, 0.0)),
-                order,
-                variable,
-            );
+        let real = derivative(material, k0, order);
+        let complex = material
+            .relative_permittivity_complex_derivative(Scalar(Complex64::new(k0, 0.0)), order);
 
-            assert_complex_close(real, complex, 1.0e-11, 1.0e-11);
-        }
+        assert_complex_close(real, complex, 1.0e-11, 1.0e-11);
     }
 }
 
@@ -83,43 +70,11 @@ where
     let first_fd = (plus - minus) / (2.0 * h);
     let second_fd = (plus - 2.0 * centre + minus) / (h * h);
 
-    let first = derivative(
-        material,
-        k0,
-        DerivativeOrder::First,
-        SpectralVariable::VacuumWavenumber,
-    );
-    let second = derivative(
-        material,
-        k0,
-        DerivativeOrder::Second,
-        SpectralVariable::VacuumWavenumber,
-    );
+    let first = derivative(material, k0, DerivativeOrder::First);
+    let second = derivative(material, k0, DerivativeOrder::Second);
 
     assert_complex_close(first, first_fd, 2.0e-6, 2.0e-7);
     assert_complex_close(second, second_fd, 2.0e-4, 2.0e-5);
-
-    let first_squared = derivative(
-        material,
-        k0,
-        DerivativeOrder::First,
-        SpectralVariable::VacuumWavenumberSquared,
-    );
-    let second_squared = derivative(
-        material,
-        k0,
-        DerivativeOrder::Second,
-        SpectralVariable::VacuumWavenumberSquared,
-    );
-
-    assert_complex_close(first_squared, first / (2.0 * k0), 1.0e-12, 1.0e-12);
-
-    assert_complex_close(
-        second_squared,
-        second / (4.0 * k0 * k0) - first / (4.0 * k0 * k0 * k0),
-        1.0e-12,
-        1.0e-12,
-    );
 }
 
 fn check_model<M>(material: &M)
