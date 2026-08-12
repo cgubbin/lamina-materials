@@ -1,10 +1,11 @@
 //! Sellmeier model in canonical wavenumber form.
 
-use crate::{MaterialModelError, Wavelength};
+use crate::MaterialModelError;
 use lamina_core::{
     ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
     Material, MeromorphicMaterial, Sampled,
 };
+use lamina_units::{SpectralQuantity, Wavelength};
 use num_traits::{Float, FloatConst, FromPrimitive};
 use std::fmt::Debug;
 
@@ -14,8 +15,8 @@ use std::fmt::Debug;
 ///
 /// `B q² / (q² - k₀²)`,
 ///
-/// where `B` is dimensionless and the pole angular wavenumber `q` is expressed
-/// in inverse centimetres (`cm⁻¹`).
+/// where `B` is dimensionless and the pole angular wavenumber `q` is stored
+/// canonically in inverse centimetres (`cm⁻¹`).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct SellmeierTerm<R> {
     coefficient: R,
@@ -26,11 +27,19 @@ impl<R> SellmeierTerm<R>
 where
     R: Float + Debug,
 {
-    /// Construct from dimensionless coefficient `B` and pole angular wavenumber.
+    /// Construct from dimensionless coefficient `B` and a spectral pole.
     ///
-    /// `pole_wavenumber` is expressed in inverse centimetres (`cm⁻¹`).
-    pub fn new(coefficient: R, pole_wavenumber: R) -> Result<Self, MaterialModelError<R>> {
+    /// `pole` may be supplied in any representation implementing
+    /// [`ToCanonicalSpectral`]. It is converted immediately to the canonical
+    /// vacuum angular wavenumber in inverse centimetres (`cm⁻¹`).
+    pub fn new<P>(coefficient: R, pole: P) -> Result<Self, MaterialModelError<R>>
+    where
+        R: FromPrimitive,
+        P: SpectralQuantity<R>,
+    {
         validate_finite("coefficient", coefficient)?;
+
+        let pole_wavenumber = pole.vacuum_angular_wavenumber().as_inverse_centimetres();
         validate_positive("pole_wavenumber", pole_wavenumber)?;
 
         Ok(Self {
@@ -47,15 +56,9 @@ where
     /// B λ² / (λ² - C).
     /// ```
     ///
-    /// Pass `pole_wavelength = sqrt(C)` using the wavelength unit of the source.
-    /// The wavelength is converted internally to the canonical pole angular
-    /// wavenumber
-    ///
-    /// `q = 2π / pole_wavelength`
-    ///
-    /// in inverse centimetres (`cm⁻¹`).
-    ///
-    /// `coefficient` is dimensionless.
+    /// Pass `pole_wavelength = sqrt(C)`. The wavelength is converted to the
+    /// canonical vacuum angular wavenumber `q = 2π / pole_wavelength` in
+    /// inverse centimetres (`cm⁻¹`).
     pub fn from_wavelength_pole(
         coefficient: R,
         pole_wavelength: Wavelength<R>,
@@ -63,10 +66,7 @@ where
     where
         R: FloatConst + FromPrimitive,
     {
-        Self::new(
-            coefficient,
-            pole_wavelength.vacuum_angular_wavenumber().canonical(),
-        )
+        Self::new(coefficient, pole_wavelength.vacuum_angular_wavenumber())
     }
 
     /// Return the dimensionless coefficient `B`.
@@ -74,7 +74,7 @@ where
         self.coefficient
     }
 
-    /// Return the pole angular wavenumber in inverse centimetres (`cm⁻¹`).
+    /// Return the canonical pole angular wavenumber in inverse centimetres.
     pub fn pole_wavenumber(&self) -> R {
         self.pole_wavenumber
     }
@@ -284,10 +284,17 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use approx::assert_relative_eq;
+    use lamina_units::{LengthUnit, VacuumAngularWavenumber, VacuumWavenumber};
     use ndarray::{arr0, arr1};
     use num_complex::Complex64;
 
     const TOLERANCE: f64 = 1e-12;
+
+    fn canonical_pole(value: f64) -> VacuumAngularWavenumber<f64> {
+        VacuumAngularWavenumber::inverse_centimetres(value)
+    }
 
     fn assert_complex_close(actual: Complex64, expected: Complex64) {
         let error = (actual - expected).norm();
@@ -334,12 +341,135 @@ mod tests {
     }
 
     #[test]
+    fn term_constructor_canonicalises_pole() {
+        let term =
+            SellmeierTerm::new(0.7, VacuumAngularWavenumber::inverse_centimetres(2.8)).unwrap();
+
+        assert_eq!(term.coefficient(), 0.7);
+        assert_eq!(term.pole_wavenumber(), 2.8);
+    }
+
+    #[test]
+    fn equivalent_spectral_poles_construct_same_term() {
+        let angular =
+            SellmeierTerm::new(0.7, VacuumAngularWavenumber::inverse_centimetres(2.8)).unwrap();
+
+        let ordinary = SellmeierTerm::new(
+            0.7,
+            VacuumWavenumber::inverse_centimetres(2.8 / std::f64::consts::TAU),
+        )
+        .unwrap();
+
+        assert_relative_eq!(
+            angular.pole_wavenumber(),
+            ordinary.pole_wavenumber(),
+            epsilon = TOLERANCE,
+        );
+
+        assert_eq!(angular.coefficient(), ordinary.coefficient());
+    }
+
+    #[test]
+    fn wavelength_pole_is_converted_to_angular_wavenumber() {
+        let wavelength = Wavelength::new(2.0, LengthUnit::Micrometre);
+
+        let term = SellmeierTerm::from_wavelength_pole(0.7, wavelength).unwrap();
+
+        let wavelength_cm = 2.0e-4;
+        let expected = std::f64::consts::TAU / wavelength_cm;
+
+        assert_relative_eq!(term.pole_wavenumber(), expected, epsilon = 1e-10,);
+    }
+
+    #[test]
+    fn wavelength_and_angular_wavenumber_poles_are_equivalent() {
+        let wavelength = Wavelength::new(2.0, LengthUnit::Micrometre);
+
+        let from_wavelength = SellmeierTerm::from_wavelength_pole(0.7, wavelength).unwrap();
+
+        let from_wavenumber = SellmeierTerm::new(
+            0.7,
+            VacuumAngularWavenumber::inverse_centimetres(std::f64::consts::TAU / 2.0e-4),
+        )
+        .unwrap();
+
+        assert_relative_eq!(
+            from_wavelength.pole_wavenumber(),
+            from_wavenumber.pole_wavenumber(),
+            epsilon = 1e-10,
+        );
+    }
+
+    #[test]
+    fn zero_pole_is_rejected_after_canonicalisation() {
+        let result = SellmeierTerm::new(0.7, VacuumAngularWavenumber::inverse_centimetres(0.0));
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonPositiveParameter {
+                name: "pole_wavenumber",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn negative_pole_is_rejected_after_canonicalisation() {
+        let result = SellmeierTerm::new(0.7, VacuumAngularWavenumber::inverse_centimetres(-1.0));
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonPositiveParameter {
+                name: "pole_wavenumber",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn non_finite_coefficient_is_rejected() {
+        let result = SellmeierTerm::new(f64::NAN, canonical_pole(2.8));
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonFiniteParameter {
+                name: "coefficient",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn non_finite_constant_is_rejected() {
+        let result = Sellmeier::new(f64::NAN, Vec::new());
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonFiniteParameter {
+                name: "constant",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn with_unit_constant_sets_constant_to_one() {
+        let material = Sellmeier::with_unit_constant(vec![
+            SellmeierTerm::new(0.7, canonical_pole(2.8)).unwrap(),
+        ])
+        .unwrap();
+
+        assert_eq!(material.constant(), 1.0);
+        assert_eq!(material.terms().len(), 1);
+    }
+
+    #[test]
     fn term_value_matches_closed_form() {
         let coefficient = 0.7;
         let pole = 2.8;
         let k0 = Complex64::new(0.9, 0.15);
 
-        let term = SellmeierTerm::new(coefficient, pole).unwrap();
+        let term = SellmeierTerm::new(coefficient, canonical_pole(pole)).unwrap();
 
         assert_complex_close(
             term.value_at(k0),
@@ -353,7 +483,7 @@ mod tests {
         let pole = 2.8;
         let k0 = Complex64::new(0.9, 0.15);
 
-        let term = SellmeierTerm::new(coefficient, pole).unwrap();
+        let term = SellmeierTerm::new(coefficient, canonical_pole(pole)).unwrap();
 
         assert_complex_close(
             term.derivative_at(k0, DerivativeOrder::First),
@@ -367,7 +497,7 @@ mod tests {
         let pole = 2.8;
         let k0 = Complex64::new(0.9, 0.15);
 
-        let term = SellmeierTerm::new(coefficient, pole).unwrap();
+        let term = SellmeierTerm::new(coefficient, canonical_pole(pole)).unwrap();
 
         assert_complex_close(
             term.derivative_at(k0, DerivativeOrder::Second),
@@ -381,7 +511,7 @@ mod tests {
         let pole = 2.8;
         let k0 = Complex64::new(0.9, 0.15);
 
-        let term = SellmeierTerm::new(coefficient, pole).unwrap();
+        let term = SellmeierTerm::new(coefficient, canonical_pole(pole)).unwrap();
 
         assert_complex_close(
             term.derivative_at(k0, DerivativeOrder::Third),
@@ -391,8 +521,9 @@ mod tests {
 
     #[test]
     fn material_value_is_constant_plus_sum_of_terms() {
-        let term_a = SellmeierTerm::new(0.7, 2.8).unwrap();
-        let term_b = SellmeierTerm::new(0.3, 4.1).unwrap();
+        let term_a = SellmeierTerm::new(0.7, canonical_pole(2.8)).unwrap();
+
+        let term_b = SellmeierTerm::new(0.3, canonical_pole(4.1)).unwrap();
 
         let material = Sellmeier::new(1.2, vec![term_a, term_b]).unwrap();
 
@@ -405,8 +536,9 @@ mod tests {
 
     #[test]
     fn material_derivatives_are_sum_of_term_derivatives() {
-        let term_a = SellmeierTerm::new(0.7, 2.8).unwrap();
-        let term_b = SellmeierTerm::new(0.3, 4.1).unwrap();
+        let term_a = SellmeierTerm::new(0.7, canonical_pole(2.8)).unwrap();
+
+        let term_b = SellmeierTerm::new(0.3, canonical_pole(4.1)).unwrap();
 
         let material = Sellmeier::new(1.2, vec![term_a, term_b]).unwrap();
 
@@ -428,8 +560,8 @@ mod tests {
         let material = Sellmeier::new(
             1.0,
             vec![
-                SellmeierTerm::new(0.7, 2.8).unwrap(),
-                SellmeierTerm::new(0.3, 4.1).unwrap(),
+                SellmeierTerm::new(0.7, canonical_pole(2.8)).unwrap(),
+                SellmeierTerm::new(0.3, canonical_pole(4.1)).unwrap(),
             ],
         )
         .unwrap();
@@ -457,8 +589,8 @@ mod tests {
         let material = Sellmeier::new(
             1.0,
             vec![
-                SellmeierTerm::new(0.7, 2.8).unwrap(),
-                SellmeierTerm::new(0.3, 4.1).unwrap(),
+                SellmeierTerm::new(0.7, canonical_pole(2.8)).unwrap(),
+                SellmeierTerm::new(0.3, canonical_pole(4.1)).unwrap(),
             ],
         )
         .unwrap();

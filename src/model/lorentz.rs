@@ -5,7 +5,8 @@ use crate::{
     model::{DrudeLorentz, delegate::delegate_analytical_material},
 };
 use lamina_core::{ComplexScalar, DerivativeOrder};
-use num_traits::Float;
+use lamina_units::{SpectralQuantity, VacuumAngularWavenumberSquared};
+use num_traits::{Float, FromPrimitive};
 use std::fmt::Debug;
 
 /// One Lorentz oscillator contribution to relative permittivity.
@@ -33,15 +34,7 @@ where
     ///
     /// `strength` has units of `cm⁻²`. `resonance` and `damping` are angular
     /// wavenumbers in inverse centimetres (`cm⁻¹`).
-    pub fn new(strength: R, resonance: R, damping: R) -> Result<Self, MaterialModelError<R>> {
-        Self::from_strength(strength, resonance, damping)
-    }
-
-    /// Construct from primitive oscillator strength.
-    ///
-    /// `strength` has units of `cm⁻²`. `resonance` and `damping` are angular
-    /// wavenumbers in inverse centimetres (`cm⁻¹`).
-    pub fn from_strength(
+    pub(crate) fn new(
         strength: R,
         resonance: R,
         damping: R,
@@ -49,7 +42,6 @@ where
         validate_nonnegative("strength", strength)?;
         validate_positive("resonance", resonance)?;
         validate_nonnegative("damping", damping)?;
-
         Ok(Self {
             strength,
             resonance,
@@ -57,19 +49,62 @@ where
         })
     }
 
+    /// Construct from primitive oscillator strength.
+    ///
+    /// `strength` may use any squared spectral representation implementing
+    /// [`ToCanonicalSpectralSquared`]. `resonance` and `damping` may use any
+    /// spectral representation implementing [`ToCanonicalSpectral`].
+    ///
+    /// All three parameters are converted immediately to the canonical
+    /// inverse-centimetre representation before validation and storage.
+    pub fn from_strength<Q, D>(
+        strength: VacuumAngularWavenumberSquared<R>,
+        resonance: Q,
+        damping: D,
+    ) -> Result<Self, MaterialModelError<R>>
+    where
+        R: FromPrimitive,
+        Q: SpectralQuantity<R>,
+        D: SpectralQuantity<R>,
+    {
+        Self::new(
+            strength.as_inverse_centimetres_squared(),
+            resonance
+                .vacuum_angular_wavenumber()
+                .as_inverse_centimetres(),
+            damping.vacuum_angular_wavenumber().as_inverse_centimetres(),
+        )
+    }
+
     /// Construct from the dimensionless zero-frequency contribution `Δε`.
     ///
     /// The primitive strength is obtained as `S = Δε Ω²`.
-    /// `resonance` and `damping` are expressed in inverse centimetres (`cm⁻¹`).
-    pub fn from_delta_epsilon(
+    /// `resonance` and `damping` may use any spectral representation implementing
+    /// [`ToCanonicalSpectral`] and are converted immediately to canonical vacuum
+    /// angular wavenumber in inverse centimetres (`cm⁻¹`).
+    pub fn from_delta_epsilon<Q, D>(
         delta_epsilon: R,
-        resonance: R,
-        damping: R,
-    ) -> Result<Self, MaterialModelError<R>> {
+        resonance: Q,
+        damping: D,
+    ) -> Result<Self, MaterialModelError<R>>
+    where
+        R: FromPrimitive,
+        Q: SpectralQuantity<R>,
+        D: SpectralQuantity<R>,
+    {
         validate_nonnegative("delta_epsilon", delta_epsilon)?;
-        validate_positive("resonance", resonance)?;
 
-        Self::from_strength(delta_epsilon * resonance * resonance, resonance, damping)
+        let resonance = resonance
+            .vacuum_angular_wavenumber()
+            .as_inverse_centimetres();
+
+        validate_nonnegative("resonance", resonance)?;
+
+        Self::new(
+            delta_epsilon * resonance * resonance,
+            resonance,
+            damping.vacuum_angular_wavenumber().as_inverse_centimetres(),
+        )
     }
 
     /// Return the primitive oscillator strength in `cm⁻²`.
@@ -209,6 +244,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use approx::assert_relative_eq;
+    use lamina_units::{VacuumAngularWavenumber, VacuumAngularWavenumberSquared, VacuumWavenumber};
     use num_complex::Complex64;
 
     const TOLERANCE: f64 = 1e-12;
@@ -254,6 +292,154 @@ mod tests {
         let d2 = -2.0;
 
         6.0 * strength * d1 * (d2 * d - d1 * d1) / (d * d * d * d)
+    }
+
+    #[test]
+    fn from_strength_canonicalises_inputs() {
+        let oscillator = LorentzOscillator::from_strength(
+            VacuumAngularWavenumberSquared::inverse_centimetres_squared(400.0),
+            VacuumAngularWavenumber::inverse_centimetres(20.0),
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+        )
+        .unwrap();
+
+        assert_eq!(oscillator.strength(), 400.0);
+        assert_eq!(oscillator.resonance(), 20.0);
+        assert_eq!(oscillator.damping(), 2.0);
+    }
+
+    #[test]
+    fn from_strength_accepts_equivalent_spectral_representations() {
+        let canonical = LorentzOscillator::from_strength(
+            VacuumAngularWavenumberSquared::inverse_centimetres_squared(400.0),
+            VacuumAngularWavenumber::inverse_centimetres(20.0),
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+        )
+        .unwrap();
+
+        let spectroscopic = LorentzOscillator::from_strength(
+            VacuumAngularWavenumberSquared::inverse_centimetres_squared(400.0),
+            VacuumWavenumber::inverse_centimetres(20.0 / std::f64::consts::TAU),
+            VacuumWavenumber::inverse_centimetres(2.0 / std::f64::consts::TAU),
+        )
+        .unwrap();
+
+        assert_relative_eq!(
+            canonical.resonance(),
+            spectroscopic.resonance(),
+            epsilon = 1.0e-12,
+        );
+
+        assert_relative_eq!(
+            canonical.damping(),
+            spectroscopic.damping(),
+            epsilon = 1.0e-12,
+        );
+
+        assert_relative_eq!(
+            canonical.strength(),
+            spectroscopic.strength(),
+            epsilon = 1.0e-12,
+        );
+    }
+
+    #[test]
+    fn from_delta_epsilon_constructs_expected_strength() {
+        let oscillator = LorentzOscillator::from_delta_epsilon(
+            2.0,
+            VacuumAngularWavenumber::inverse_centimetres(3.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+        )
+        .unwrap();
+
+        assert_eq!(oscillator.strength(), 18.0);
+        assert_eq!(oscillator.delta_epsilon(), 2.0);
+        assert_eq!(oscillator.resonance(), 3.0);
+        assert_eq!(oscillator.damping(), 0.1);
+    }
+
+    #[test]
+    fn from_delta_epsilon_canonicalises_spectral_inputs_before_forming_strength() {
+        let oscillator = LorentzOscillator::from_delta_epsilon(
+            2.0,
+            VacuumWavenumber::inverse_centimetres(3.0 / std::f64::consts::TAU),
+            VacuumWavenumber::inverse_centimetres(0.1 / std::f64::consts::TAU),
+        )
+        .unwrap();
+
+        assert_relative_eq!(oscillator.resonance(), 3.0, epsilon = 1.0e-12,);
+
+        assert_relative_eq!(oscillator.damping(), 0.1, epsilon = 1.0e-12,);
+
+        assert_relative_eq!(oscillator.strength(), 18.0, epsilon = 1.0e-11,);
+    }
+
+    #[test]
+    fn negative_strength_is_rejected_after_canonicalisation() {
+        let result = LorentzOscillator::from_strength(
+            VacuumAngularWavenumberSquared::inverse_centimetres_squared(-1.0),
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NegativeParameter {
+                name: "strength",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn zero_resonance_is_rejected_after_canonicalisation() {
+        let result = LorentzOscillator::from_delta_epsilon(
+            1.0,
+            VacuumAngularWavenumber::inverse_centimetres(0.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonPositiveParameter {
+                name: "resonance",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn negative_damping_is_rejected_after_canonicalisation() {
+        let result = LorentzOscillator::from_delta_epsilon(
+            1.0,
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            VacuumAngularWavenumber::inverse_centimetres(-0.1),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NegativeParameter {
+                name: "damping",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn negative_delta_epsilon_is_rejected() {
+        let result = LorentzOscillator::from_delta_epsilon(
+            -1.0,
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NegativeParameter {
+                name: "delta_epsilon",
+                ..
+            })
+        ));
     }
 
     #[test]

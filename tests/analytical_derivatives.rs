@@ -2,10 +2,15 @@ use lamina_core::{DerivativeOrder, DifferentiableMaterial, DifferentiableMeromor
 use lamina_materials::{
     Cauchy, Drude, DrudeLorentz, Lorentz, LorentzOscillator, Sellmeier, SellmeierTerm,
 };
+use lamina_units::VacuumAngularWavenumber;
 use ndarray::{arr0, arr1};
 use num_complex::Complex64;
 
 const TOLERANCE: f64 = 1e-12;
+
+fn spectral(value: f64) -> VacuumAngularWavenumber<f64> {
+    VacuumAngularWavenumber::inverse_centimetres(value)
+}
 
 fn assert_complex_close(actual: Complex64, expected: Complex64) {
     let error = (actual - expected).norm();
@@ -76,7 +81,7 @@ where
 
 #[test]
 fn drude_public_derivative_contract_is_consistent() {
-    let material = Drude::new(1.2, 2.4, 0.3).unwrap();
+    let material = Drude::new(1.2, spectral(2.4), spectral(0.3)).unwrap();
 
     assert_real_and_complex_derivatives_agree(&material, 1.1);
     assert_scalar_and_sampled_derivatives_agree(&material, 1.1);
@@ -85,7 +90,8 @@ fn drude_public_derivative_contract_is_consistent() {
 
 #[test]
 fn lorentz_public_derivative_contract_is_consistent() {
-    let oscillator = LorentzOscillator::new(1.3, 2.7, 0.2).unwrap();
+    let oscillator =
+        LorentzOscillator::from_delta_epsilon(1.3, spectral(2.7), spectral(0.2)).unwrap();
 
     let material = Lorentz::new(1.4, vec![oscillator]).unwrap();
 
@@ -96,9 +102,12 @@ fn lorentz_public_derivative_contract_is_consistent() {
 
 #[test]
 fn drude_lorentz_public_derivative_contract_is_consistent() {
-    let oscillator = LorentzOscillator::new(0.9, 3.0, 0.25).unwrap();
+    let oscillator =
+        LorentzOscillator::from_delta_epsilon(0.9, spectral(3.0), spectral(0.25)).unwrap();
 
-    let material = DrudeLorentz::new(1.3, 1.8, 0.35, vec![oscillator]).unwrap();
+    let material =
+        DrudeLorentz::from_plasma_wavenumber(1.3, spectral(1.8), spectral(0.35), vec![oscillator])
+            .unwrap();
 
     assert_real_and_complex_derivatives_agree(&material, 1.2);
     assert_scalar_and_sampled_derivatives_agree(&material, 1.2);
@@ -110,8 +119,8 @@ fn sellmeier_public_derivative_contract_is_consistent() {
     let material = Sellmeier::new(
         1.0,
         vec![
-            SellmeierTerm::new(0.7, 2.8).unwrap(),
-            SellmeierTerm::new(0.3, 4.1).unwrap(),
+            SellmeierTerm::new(0.7, spectral(2.8)).unwrap(),
+            SellmeierTerm::new(0.3, spectral(4.1)).unwrap(),
         ],
     )
     .unwrap();
@@ -123,7 +132,8 @@ fn sellmeier_public_derivative_contract_is_consistent() {
 
 #[test]
 fn cauchy_public_derivative_contract_is_consistent() {
-    let material = Cauchy::new(vec![1.4, 0.3, -0.07, 0.012]).unwrap();
+    let material =
+        Cauchy::from_spectral_basis(vec![1.4, 0.3, -0.07, 0.012], spectral(1.0)).unwrap();
 
     assert_real_and_complex_derivatives_agree(&material, 0.8);
     assert_scalar_and_sampled_derivatives_agree(&material, 0.8);
@@ -136,7 +146,8 @@ fn drude_public_derivative_orders_match_closed_form() {
     let plasma_wavenumber: f64 = 2.0;
     let k0: f64 = 1.25;
 
-    let material = Drude::new(epsilon_infinity, plasma_wavenumber, 0.0).unwrap();
+    let material =
+        Drude::new(epsilon_infinity, spectral(plasma_wavenumber), spectral(0.0)).unwrap();
 
     let strength = plasma_wavenumber.powi(2);
 

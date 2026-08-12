@@ -1,4 +1,6 @@
-use crate::{MaterialRecord, Sellmeier, SellmeierTerm, SpectralDomain, Wavelength};
+use crate::{MaterialRecord, Sellmeier, SellmeierTerm, SpectralDomain};
+
+use lamina_units::Wavelength;
 use num_traits::{Float, FloatConst, FromPrimitive};
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]

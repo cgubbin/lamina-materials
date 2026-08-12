@@ -20,15 +20,10 @@ pub mod database;
 pub mod error;
 pub mod metadata;
 pub mod model;
-pub mod units;
 
 pub use error::{MaterialModelError, TabulatedMaterialError};
 pub use metadata::{MaterialRecord, SpectralDomain};
 pub use model::{
     Cauchy, Drude, DrudeLorentz, Extrapolation, Lorentz, LorentzOscillator, Sellmeier,
     SellmeierTerm, Tabulated,
-};
-pub use units::{
-    AngularFrequency, Frequency, ToCanonicalSpectral, ToCanonicalSpectralSquared,
-    VacuumAngularWavenumber, VacuumWavenumber, Wavelength,
 };

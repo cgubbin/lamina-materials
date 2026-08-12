@@ -5,7 +5,8 @@ use lamina_core::{
     ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
     Material, MeromorphicMaterial, Sampled,
 };
-use num_traits::Float;
+use lamina_units::SpectralQuantity;
+use num_traits::{Float, FromPrimitive};
 use std::fmt::Debug;
 
 /// Cauchy refractive-index model in canonical angular-wavenumber form.
@@ -32,7 +33,7 @@ where
     ///
     /// For coefficient index `i`, `aᵢ` has units `cm^(2i)` because `k₀` is
     /// expressed in `cm⁻¹`.
-    pub fn new(coefficients: Vec<R>) -> Result<Self, MaterialModelError<R>> {
+    pub(crate) fn new(coefficients: Vec<R>) -> Result<Self, MaterialModelError<R>> {
         if coefficients.is_empty() {
             return Err(MaterialModelError::EmptyCoefficients {
                 name: "coefficients",
@@ -49,6 +50,62 @@ where
         }
 
         Ok(Self { coefficients })
+    }
+
+    /// Construct from coefficients expressed in another spectral coordinate.
+    ///
+    /// `unit_spectral` represents one unit of the source spectral coordinate.
+    /// The supplied coefficients are interpreted as
+    ///
+    /// `n(x) = a₀ + a₁x² + a₂x⁴ + ...`
+    ///
+    /// and converted to the canonical vacuum-angular-wavenumber basis.
+    ///
+    /// For example, if the source coefficients are written for `x` measured
+    /// in `µm⁻¹`, pass a spectral quantity representing `1 µm⁻¹`.
+    pub fn from_spectral_basis<S>(
+        coefficients: Vec<R>,
+        unit_spectral: S,
+    ) -> Result<Self, MaterialModelError<R>>
+    where
+        R: FromPrimitive,
+        S: SpectralQuantity<R>,
+    {
+        if coefficients.is_empty() {
+            return Err(MaterialModelError::EmptyCoefficients {
+                name: "coefficients",
+            });
+        }
+
+        let scale = unit_spectral
+            .vacuum_angular_wavenumber()
+            .as_inverse_centimetres();
+
+        if !scale.is_finite() || scale <= R::zero() {
+            return Err(MaterialModelError::NonPositiveParameter {
+                name: "spectral_basis",
+                value: scale,
+            });
+        }
+
+        let scale_squared = scale * scale;
+
+        let mut factor = R::one();
+        let mut canonical = Vec::with_capacity(coefficients.len());
+
+        for coefficient in coefficients {
+            if !coefficient.is_finite() {
+                return Err(MaterialModelError::NonFiniteParameter {
+                    name: "coefficient",
+                    value: coefficient,
+                });
+            }
+
+            canonical.push(coefficient / factor);
+            factor = factor * scale_squared;
+        }
+
+        Self::new(canonical)
     }
 
     /// Return coefficients ordered by ascending powers of `k₀²`.
@@ -278,6 +335,8 @@ where
 
 #[cfg(test)]
 mod tests {
+    use lamina_units::{VacuumAngularWavenumber, VacuumWavenumber};
+
     use super::*;
     use num_complex::Complex64;
 
@@ -387,5 +446,140 @@ mod tests {
             model.derivative_at(k, DerivativeOrder::Third),
             6.0 * n1 * n2 + 2.0 * n * n3,
         );
+    }
+
+    #[test]
+    fn converted_model_preserves_source_polynomial() {
+        let source = [1.4, 0.3, -0.07, 0.012];
+
+        let model = Cauchy::from_spectral_basis(
+            source.to_vec(),
+            VacuumWavenumber::inverse_centimetres(1.0),
+        )
+        .unwrap();
+
+        // Source coordinate: ordinary vacuum wavenumber in cm^-1.
+        let x = Complex64::new(0.8, 0.15);
+
+        // Canonical coordinate k0 = 2π x.
+        let k0 = std::f64::consts::TAU * x;
+
+        let x2 = x * x;
+        let x4 = x2 * x2;
+        let x6 = x4 * x2;
+
+        let expected =
+            Complex64::new(source[0], 0.0) + source[1] * x2 + source[2] * x4 + source[3] * x6;
+
+        assert_complex_close(model.refractive_index_at(k0), expected);
+    }
+
+    #[test]
+    fn spectral_basis_rejects_empty_coefficients() {
+        let result = Cauchy::<f64>::from_spectral_basis(
+            Vec::new(),
+            VacuumAngularWavenumber::inverse_centimetres(1.0),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::EmptyCoefficients {
+                name: "coefficients",
+            })
+        ));
+    }
+
+    #[test]
+    fn spectral_basis_rejects_non_finite_coefficient() {
+        let result = Cauchy::from_spectral_basis(
+            vec![1.4, f64::NAN],
+            VacuumAngularWavenumber::inverse_centimetres(1.0),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonFiniteParameter {
+                name: "coefficient",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn spectral_basis_rejects_zero_basis() {
+        let result = Cauchy::from_spectral_basis(
+            vec![1.4, 0.3],
+            VacuumAngularWavenumber::inverse_centimetres(0.0),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonPositiveParameter {
+                name: "spectral_basis",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn spectral_basis_rejects_negative_basis() {
+        let result = Cauchy::from_spectral_basis(
+            vec![1.4, 0.3],
+            VacuumAngularWavenumber::inverse_centimetres(-1.0),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonPositiveParameter {
+                name: "spectral_basis",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn real_axis_and_complex_axis_derivatives_agree() {
+        use ndarray::arr0;
+
+        let model = Cauchy::new(vec![1.4, 0.3, -0.07, 0.012]).unwrap();
+
+        let k0 = 0.8;
+
+        for order in [
+            DerivativeOrder::First,
+            DerivativeOrder::Second,
+            DerivativeOrder::Third,
+        ] {
+            let real = model.relative_permittivity_derivative::<_, Complex64>(arr0(k0), order);
+
+            let complex = model.relative_permittivity_complex_derivative::<_, Complex64>(
+                arr0(Complex64::new(k0, 0.0)),
+                order,
+            );
+
+            assert_complex_close(real[()], complex[()]);
+        }
+    }
+
+    #[test]
+    fn scalar_and_sampled_derivatives_agree() {
+        use ndarray::{arr0, arr1};
+
+        let model = Cauchy::new(vec![1.4, 0.3, -0.07, 0.012]).unwrap();
+
+        let k0 = 0.8;
+
+        for order in [
+            DerivativeOrder::First,
+            DerivativeOrder::Second,
+            DerivativeOrder::Third,
+        ] {
+            let scalar = model.relative_permittivity_derivative::<_, Complex64>(arr0(k0), order);
+
+            let sampled =
+                model.relative_permittivity_derivative::<_, Complex64>(arr1(&[k0]), order);
+
+            assert_complex_close(sampled[0], scalar[()]);
+        }
     }
 }

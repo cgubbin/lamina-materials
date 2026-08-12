@@ -5,7 +5,8 @@ use lamina_core::{
     ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
     Material, MeromorphicMaterial, Sampled,
 };
-use num_traits::Float;
+use lamina_units::{SpectralQuantity, VacuumAngularWavenumberSquared};
+use num_traits::{Float, FromPrimitive};
 use std::fmt::Debug;
 
 /// Combined Drude–Lorentz relative-permittivity model.
@@ -35,7 +36,7 @@ where
     /// `epsilon_infinity` is dimensionless. `drude_strength` has units of `cm⁻²`,
     /// `drude_damping` has units of `cm⁻¹`, and each oscillator must use the same
     /// canonical inverse-centimetre convention.
-    pub fn new(
+    pub(crate) fn new(
         epsilon_infinity: R,
         drude_strength: R,
         drude_damping: R,
@@ -53,22 +54,62 @@ where
         })
     }
 
+    /// Construct from unit-aware primitive Drude parameters.
+    ///
+    /// `drude_strength` is converted to canonical `cm⁻²`, while
+    /// `drude_damping` is converted to canonical vacuum angular wavenumber
+    /// in `cm⁻¹`.
+    pub fn from_strength<D>(
+        epsilon_infinity: R,
+        drude_strength: VacuumAngularWavenumberSquared<R>,
+        drude_damping: D,
+        oscillators: Vec<LorentzOscillator<R>>,
+    ) -> Result<Self, MaterialModelError<R>>
+    where
+        R: FromPrimitive,
+        D: SpectralQuantity<R>,
+    {
+        Self::new(
+            epsilon_infinity,
+            drude_strength.as_inverse_centimetres_squared(),
+            drude_damping
+                .vacuum_angular_wavenumber()
+                .as_inverse_centimetres(),
+            oscillators,
+        )
+    }
+
     /// Construct from the Drude plasma angular wavenumber.
     ///
     /// `epsilon_infinity` is dimensionless. `plasma_wavenumber` and
-    /// `drude_damping` are expressed in inverse centimetres (`cm⁻¹`).
-    /// The primitive Drude strength is `Ωᴅ²`.
-    pub fn from_plasma_wavenumber(
+    /// `drude_damping` may use any spectral representation implementing
+    /// [`ToCanonicalSpectral`]. Both are converted immediately to canonical
+    /// vacuum angular wavenumber in inverse centimetres (`cm⁻¹`).
+    ///
+    /// The primitive Drude strength is formed as `Ωᴅ²` after canonicalisation.
+    pub fn from_plasma_wavenumber<P, D>(
         epsilon_infinity: R,
-        plasma_wavenumber: R,
-        drude_damping: R,
+        plasma_wavenumber: P,
+        drude_damping: D,
         oscillators: Vec<LorentzOscillator<R>>,
-    ) -> Result<Self, MaterialModelError<R>> {
+    ) -> Result<Self, MaterialModelError<R>>
+    where
+        R: FromPrimitive,
+        P: SpectralQuantity<R>,
+        D: SpectralQuantity<R>,
+    {
+        let plasma_wavenumber = plasma_wavenumber
+            .vacuum_angular_wavenumber()
+            .as_inverse_centimetres();
+
         validate_nonnegative("plasma_wavenumber", plasma_wavenumber)?;
+
         Self::new(
             epsilon_infinity,
             plasma_wavenumber * plasma_wavenumber,
-            drude_damping,
+            drude_damping
+                .vacuum_angular_wavenumber()
+                .as_inverse_centimetres(),
             oscillators,
         )
     }
@@ -279,6 +320,9 @@ where
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    use approx::assert_relative_eq;
+    use lamina_units::{VacuumAngularWavenumber, VacuumAngularWavenumberSquared, VacuumWavenumber};
     use num_complex::Complex64;
 
     const TOLERANCE: f64 = 1e-12;
@@ -295,6 +339,159 @@ mod tests {
     }
 
     #[test]
+    fn from_strength_canonicalises_parameters() {
+        let model = DrudeLorentz::from_strength(
+            1.5,
+            VacuumAngularWavenumberSquared::inverse_centimetres_squared(400.0),
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            Vec::new(),
+        )
+        .unwrap();
+
+        assert_eq!(model.epsilon_infinity(), 1.5);
+        assert_eq!(model.drude_strength(), 400.0);
+        assert_eq!(model.plasma_wavenumber(), 20.0);
+        assert_eq!(model.drude_damping(), 2.0);
+    }
+
+    #[test]
+    fn from_plasma_wavenumber_canonicalises_parameters() {
+        let model = DrudeLorentz::from_plasma_wavenumber(
+            1.5,
+            VacuumAngularWavenumber::inverse_centimetres(20.0),
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            Vec::new(),
+        )
+        .unwrap();
+
+        assert_eq!(model.epsilon_infinity(), 1.5);
+        assert_eq!(model.drude_strength(), 400.0);
+        assert_eq!(model.plasma_wavenumber(), 20.0);
+        assert_eq!(model.drude_damping(), 2.0);
+    }
+
+    #[test]
+    fn equivalent_spectral_representations_construct_same_model() {
+        let canonical = DrudeLorentz::from_plasma_wavenumber(
+            1.5,
+            VacuumAngularWavenumber::inverse_centimetres(20.0),
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            Vec::new(),
+        )
+        .unwrap();
+
+        let spectroscopic = DrudeLorentz::from_plasma_wavenumber(
+            1.5,
+            VacuumWavenumber::inverse_centimetres(20.0 / std::f64::consts::TAU),
+            VacuumWavenumber::inverse_centimetres(2.0 / std::f64::consts::TAU),
+            Vec::new(),
+        )
+        .unwrap();
+
+        assert_relative_eq!(
+            canonical.drude_strength(),
+            spectroscopic.drude_strength(),
+            epsilon = 1.0e-12,
+        );
+
+        assert_relative_eq!(
+            canonical.plasma_wavenumber(),
+            spectroscopic.plasma_wavenumber(),
+            epsilon = 1.0e-12,
+        );
+
+        assert_relative_eq!(
+            canonical.drude_damping(),
+            spectroscopic.drude_damping(),
+            epsilon = 1.0e-12,
+        );
+    }
+
+    #[test]
+    fn negative_plasma_wavenumber_is_rejected_before_squaring() {
+        let result = DrudeLorentz::from_plasma_wavenumber(
+            1.0,
+            VacuumAngularWavenumber::inverse_centimetres(-2.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+            Vec::new(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NegativeParameter {
+                name: "plasma_wavenumber",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn negative_primitive_strength_is_rejected() {
+        let result = DrudeLorentz::from_strength(
+            1.0,
+            VacuumAngularWavenumberSquared::inverse_centimetres_squared(-1.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+            Vec::new(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NegativeParameter {
+                name: "drude_strength",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn negative_damping_is_rejected_after_canonicalisation() {
+        let result = DrudeLorentz::from_plasma_wavenumber(
+            1.0,
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            VacuumAngularWavenumber::inverse_centimetres(-0.1),
+            Vec::new(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NegativeParameter {
+                name: "drude_damping",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn non_finite_epsilon_infinity_is_rejected() {
+        let result = DrudeLorentz::from_plasma_wavenumber(
+            f64::NAN,
+            VacuumAngularWavenumber::inverse_centimetres(2.0),
+            VacuumAngularWavenumber::inverse_centimetres(0.1),
+            Vec::new(),
+        );
+
+        assert!(matches!(
+            result,
+            Err(MaterialModelError::NonFiniteParameter {
+                name: "epsilon_infinity",
+                ..
+            })
+        ));
+    }
+
+    #[test]
+    fn lorentz_only_has_zero_drude_contribution() {
+        let oscillator = LorentzOscillator::new(0.8, 2.7, 0.25).unwrap();
+
+        let model = DrudeLorentz::lorentz_only(1.4, vec![oscillator]).unwrap();
+
+        assert_eq!(model.drude_strength(), 0.0);
+        assert_eq!(model.drude_damping(), 0.0);
+        assert_eq!(model.plasma_wavenumber(), 0.0);
+        assert_eq!(model.oscillators(), &[oscillator]);
+    }
+
+    #[test]
     fn drude_value_matches_closed_form() {
         let strength = 2.1;
         let damping = 0.4;
@@ -304,6 +501,7 @@ mod tests {
         let k0 = Complex64::new(1.3, 0.1);
 
         let d = k0 * k0 + Complex64::i() * damping * k0;
+
         let expected = -strength / d;
 
         assert_complex_close(model.drude_value(k0), expected);
@@ -375,7 +573,20 @@ mod tests {
     }
 
     #[test]
-    fn drude_lorentz_derivative_is_sum_of_requested_contributions() {
+    fn value_is_sum_of_constant_drude_and_lorentz_contributions() {
+        let oscillator = LorentzOscillator::new(0.8, 2.7, 0.25).unwrap();
+
+        let model = DrudeLorentz::new(1.4, 1.9, 0.3, vec![oscillator]).unwrap();
+
+        let k0 = Complex64::new(1.1, 0.2);
+
+        let expected = Complex64::new(1.4, 0.0) + model.drude_value(k0) + oscillator.value_at(k0);
+
+        assert_complex_close(model.relative_permittivity_at(k0), expected);
+    }
+
+    #[test]
+    fn derivative_is_sum_of_requested_contributions() {
         let oscillator = LorentzOscillator::new(0.8, 2.7, 0.25).unwrap();
 
         let model = DrudeLorentz::new(1.4, 1.9, 0.3, vec![oscillator]).unwrap();
