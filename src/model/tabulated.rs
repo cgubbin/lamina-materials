@@ -28,7 +28,7 @@ pub enum Extrapolation {
 /// continuation or intrinsic dispersive derivative contract.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Tabulated<R> {
-    vacuum_wavenumber: Array1<R>,
+    vacuum_angular_wavenumber: Array1<R>,
     relative_permittivity: Array1<Complex<R>>,
     extrapolation: Extrapolation,
 }
@@ -39,28 +39,28 @@ where
 {
     /// Construct validated tabulated constitutive data.
     ///
-    /// `vacuum_wavenumber` contains strictly increasing canonical vacuum angular
+    /// `vacuum_angular_wavenumber` contains strictly increasing canonical vacuum angular
     /// wavenumbers in inverse centimetres (`cm⁻¹`). `relative_permittivity` contains
     /// the corresponding dimensionless complex relative permittivities.
     pub fn new(
-        vacuum_wavenumber: Array1<R>,
+        vacuum_angular_wavenumber: Array1<R>,
         relative_permittivity: Array1<Complex<R>>,
         extrapolation: Extrapolation,
     ) -> Result<Self, TabulatedMaterialError<R>> {
-        if vacuum_wavenumber.len() != relative_permittivity.len() {
+        if vacuum_angular_wavenumber.len() != relative_permittivity.len() {
             return Err(TabulatedMaterialError::LengthMismatch {
-                coordinate_len: vacuum_wavenumber.len(),
+                coordinate_len: vacuum_angular_wavenumber.len(),
                 value_len: relative_permittivity.len(),
             });
         }
 
-        if vacuum_wavenumber.len() < 2 {
+        if vacuum_angular_wavenumber.len() < 2 {
             return Err(TabulatedMaterialError::TooFewSamples {
-                len: vacuum_wavenumber.len(),
+                len: vacuum_angular_wavenumber.len(),
             });
         }
 
-        for (index, &coordinate) in vacuum_wavenumber.iter().enumerate() {
+        for (index, &coordinate) in vacuum_angular_wavenumber.iter().enumerate() {
             if !coordinate.is_finite() {
                 return Err(TabulatedMaterialError::NonFiniteCoordinate {
                     index,
@@ -75,9 +75,9 @@ where
             }
         }
 
-        for index in 1..vacuum_wavenumber.len() {
-            let left = vacuum_wavenumber[index - 1];
-            let right = vacuum_wavenumber[index];
+        for index in 1..vacuum_angular_wavenumber.len() {
+            let left = vacuum_angular_wavenumber[index - 1];
+            let right = vacuum_angular_wavenumber[index];
 
             if right <= left {
                 return Err(TabulatedMaterialError::NonIncreasingCoordinates {
@@ -89,15 +89,15 @@ where
         }
 
         Ok(Self {
-            vacuum_wavenumber,
+            vacuum_angular_wavenumber,
             relative_permittivity,
             extrapolation,
         })
     }
 
     /// Return tabulated coordinates.
-    pub fn vacuum_wavenumber(&self) -> &Array1<R> {
-        &self.vacuum_wavenumber
+    pub fn vacuum_angular_wavenumber(&self) -> &Array1<R> {
+        &self.vacuum_angular_wavenumber
     }
 
     /// Return tabulated complex relative permittivity.
@@ -111,16 +111,16 @@ where
     }
 
     fn interpolate(&self, x: R) -> Complex<R> {
-        let last = self.vacuum_wavenumber.len() - 1;
+        let last = self.vacuum_angular_wavenumber.len() - 1;
 
-        if x <= self.vacuum_wavenumber[0] {
+        if x <= self.vacuum_angular_wavenumber[0] {
             return match self.extrapolation {
                 Extrapolation::Clamp => self.relative_permittivity[0],
                 Extrapolation::Linear => self.interpolate_segment(0, x),
             };
         }
 
-        if x >= self.vacuum_wavenumber[last] {
+        if x >= self.vacuum_angular_wavenumber[last] {
             return match self.extrapolation {
                 Extrapolation::Clamp => self.relative_permittivity[last],
                 Extrapolation::Linear => self.interpolate_segment(last - 1, x),
@@ -128,7 +128,7 @@ where
         }
 
         let coordinates = self
-            .vacuum_wavenumber
+            .vacuum_angular_wavenumber
             .as_slice()
             .expect("owned Array1 is contiguous");
 
@@ -138,8 +138,8 @@ where
 
     fn interpolate_segment(&self, left: usize, x: R) -> Complex<R> {
         let right = left + 1;
-        let x0 = self.vacuum_wavenumber[left];
-        let x1 = self.vacuum_wavenumber[right];
+        let x0 = self.vacuum_angular_wavenumber[left];
+        let x1 = self.vacuum_angular_wavenumber[right];
         let fraction = (x - x0) / (x1 - x0);
         let y0 = self.relative_permittivity[left];
         let y1 = self.relative_permittivity[right];
@@ -154,20 +154,20 @@ where
 {
     type Real = R;
 
-    fn relative_permeability<I, C>(&self, vacuum_wavenumber: I) -> I::Mapped<C>
+    fn relative_permeability<I, C>(&self, vacuum_angular_wavenumber: I) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = R>,
     {
-        vacuum_wavenumber.map(|_| C::one())
+        vacuum_angular_wavenumber.map(|_| C::one())
     }
 
-    fn relative_permittivity<I, C>(&self, vacuum_wavenumber: I) -> I::Mapped<C>
+    fn relative_permittivity<I, C>(&self, vacuum_angular_wavenumber: I) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = R>,
     {
-        vacuum_wavenumber.map(|k0| {
+        vacuum_angular_wavenumber.map(|k0| {
             let epsilon = self.interpolate(k0);
             C::from_parts(epsilon.re, epsilon.im)
         })

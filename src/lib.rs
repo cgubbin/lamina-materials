@@ -7,14 +7,14 @@
 //!
 //! # Spectral convention
 //!
-//! The canonical spectral coordinate is the vacuum angular wavenumber
+//! Material evaluation uses vacuum angular wavenumber
 //!
-//! `k₀ = ω / c = 2π / λ₀`,
+//! `k₀ = ω / c = 2π / λ₀`
 //!
-//! expressed in inverse centimetres (`cm⁻¹`). Spectral material parameters are
-//! expressed in units consistent with this coordinate unless explicitly stated
-//! otherwise. Constructors accepting wavelength-domain parameters convert them
-//! to the canonical inverse-centimetre representation.
+//! in inverse centimetres (`cm⁻¹`) as its canonical spectral coordinate.
+//! Public material constructors accept semantic spectral quantities from
+//! `lamina-units` and convert them to this canonical representation before
+//! validation and storage.
 
 pub mod database;
 pub mod error;

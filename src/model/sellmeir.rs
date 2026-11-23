@@ -30,7 +30,7 @@ where
     /// Construct from dimensionless coefficient `B` and a spectral pole.
     ///
     /// `pole` may be supplied in any representation implementing
-    /// [`ToCanonicalSpectral`]. It is converted immediately to the canonical
+    /// [`SpectralQuantity`]. It is converted immediately to the canonical
     /// vacuum angular wavenumber in inverse centimetres (`cm⁻¹`).
     pub fn new<P>(coefficient: R, pole: P) -> Result<Self, MaterialModelError<R>>
     where
@@ -188,20 +188,20 @@ where
 {
     type Real = R;
 
-    fn relative_permeability<I, C>(&self, vacuum_wavenumber: I) -> I::Mapped<C>
+    fn relative_permeability<I, C>(&self, vacuum_angular_wavenumber: I) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = R>,
     {
-        vacuum_wavenumber.map(|_| C::one())
+        vacuum_angular_wavenumber.map(|_| C::one())
     }
 
-    fn relative_permittivity<I, C>(&self, vacuum_wavenumber: I) -> I::Mapped<C>
+    fn relative_permittivity<I, C>(&self, vacuum_angular_wavenumber: I) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = R>,
     {
-        vacuum_wavenumber.map(|k0| self.relative_permittivity_at::<C>(C::from_real(k0)))
+        vacuum_angular_wavenumber.map(|k0| self.relative_permittivity_at::<C>(C::from_real(k0)))
     }
 }
 
@@ -211,14 +211,14 @@ where
 {
     fn relative_permittivity_derivative<I, C>(
         &self,
-        vacuum_wavenumber: I,
+        vacuum_angular_wavenumber: I,
         order: DerivativeOrder,
     ) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = R>,
     {
-        vacuum_wavenumber.map(|k0| self.derivative_at::<C>(C::from_real(k0), order))
+        vacuum_angular_wavenumber.map(|k0| self.derivative_at::<C>(C::from_real(k0), order))
     }
 }
 
@@ -226,20 +226,20 @@ impl<R> MeromorphicMaterial for Sellmeier<R>
 where
     R: Float + Debug,
 {
-    fn relative_permeability_complex<I, C>(&self, vacuum_wavenumber: I) -> I::Mapped<C>
+    fn relative_permeability_complex<I, C>(&self, vacuum_angular_wavenumber: I) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = C>,
     {
-        vacuum_wavenumber.map(|_| C::one())
+        vacuum_angular_wavenumber.map(|_| C::one())
     }
 
-    fn relative_permittivity_complex<I, C>(&self, vacuum_wavenumber: I) -> I::Mapped<C>
+    fn relative_permittivity_complex<I, C>(&self, vacuum_angular_wavenumber: I) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = C>,
     {
-        vacuum_wavenumber.map(|k0| self.relative_permittivity_at(k0))
+        vacuum_angular_wavenumber.map(|k0| self.relative_permittivity_at(k0))
     }
 }
 
@@ -249,14 +249,14 @@ where
 {
     fn relative_permittivity_complex_derivative<I, C>(
         &self,
-        vacuum_wavenumber: I,
+        vacuum_angular_wavenumber: I,
         order: DerivativeOrder,
     ) -> I::Mapped<C>
     where
         C: ComplexScalar<RealField = R> + Copy,
         I: Sampled<Elem = C>,
     {
-        vacuum_wavenumber.map(|k0| self.derivative_at(k0, order))
+        vacuum_angular_wavenumber.map(|k0| self.derivative_at(k0, order))
     }
 }
 

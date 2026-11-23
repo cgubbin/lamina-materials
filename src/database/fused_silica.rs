@@ -3,6 +3,7 @@ use crate::{MaterialRecord, Sellmeier, SellmeierTerm, SpectralDomain};
 use lamina_units::Wavelength;
 use num_traits::{Float, FloatConst, FromPrimitive};
 
+/// Fused silica using the Malitson (1965) Sellmeier parameterisation.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
 pub struct FusedSilica<R> {
     marker: std::marker::PhantomData<R>,
@@ -48,13 +49,12 @@ where
         "I. H. Malitson, JOSA 55, 1205-1209 (1965)"
     }
     fn spectral_domain(&self) -> Option<SpectralDomain<R>> {
-        let lmin = R::from_f64(0.21e-4)?;
-        let lmax = R::from_f64(3.71e-4)?;
-        let two_pi = (R::one() + R::one()) * R::PI();
-        SpectralDomain::new(two_pi / lmax, two_pi / lmin)
+        let lmin = Wavelength::micrometres(R::from_f64(0.21e-4)?);
+        let lmax = Wavelength::micrometres(R::from_f64(3.71e-4)?);
+        SpectralDomain::from_spectral(lmin, lmax)
     }
     fn notes(&self) -> &'static str {
-        "Validity range converted from 0.21-3.71 micrometres."
+        "Reported validity range: 0.21–3.71 µm."
     }
 }
 pub fn fused_silica<R>() -> FusedSilica<R>

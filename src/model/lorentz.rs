@@ -51,9 +51,9 @@ where
 
     /// Construct from primitive oscillator strength.
     ///
-    /// `strength` may use any squared spectral representation implementing
-    /// [`ToCanonicalSpectralSquared`]. `resonance` and `damping` may use any
-    /// spectral representation implementing [`ToCanonicalSpectral`].
+    /// `strength` must be expressed as [`VacuumAngularWavenumberSquared`] through the lamina-units
+    /// typing system. `resonance` and `damping` may use any
+    /// spectral representation implementing [`SpectralQuantity`].
     ///
     /// All three parameters are converted immediately to the canonical
     /// inverse-centimetre representation before validation and storage.
@@ -80,7 +80,7 @@ where
     ///
     /// The primitive strength is obtained as `S = Δε Ω²`.
     /// `resonance` and `damping` may use any spectral representation implementing
-    /// [`ToCanonicalSpectral`] and are converted immediately to canonical vacuum
+    /// [`SpectralQuantity`] and are converted immediately to canonical vacuum
     /// angular wavenumber in inverse centimetres (`cm⁻¹`).
     pub fn from_delta_epsilon<Q, D>(
         delta_epsilon: R,
