@@ -23,7 +23,7 @@ num-complex = "0.4.6"
 num-traits = "0.2.19"
 thiserror = "2.0.18"
 lamina-core = { version = "0.1.0", path = "../lamina-core" }
-lamina-units = { version = "0.1.0", path = "../lamina-units" }
+lamina-units = { version = "0.1.1", path = "../lamina-units" }
 
 [dev-dependencies]
 approx = "0.5.1"
