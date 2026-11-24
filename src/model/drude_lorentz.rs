@@ -157,11 +157,11 @@ where
         let mut epsilon = C::from_real(self.epsilon_infinity);
 
         if self.drude_strength > R::zero() {
-            epsilon = epsilon + self.drude_value(k0);
+            epsilon += self.drude_value(k0);
         }
 
         for oscillator in &self.oscillators {
-            epsilon = epsilon + oscillator.value_at(k0);
+            epsilon += oscillator.value_at(k0);
         }
 
         epsilon
@@ -174,11 +174,11 @@ where
         let mut derivative = C::zero();
 
         if self.drude_strength > R::zero() {
-            derivative = derivative + self.drude_derivative_at(k0, order);
+            derivative += self.drude_derivative_at(k0, order);
         }
 
         for oscillator in &self.oscillators {
-            derivative = derivative + oscillator.derivative_at(k0, order);
+            derivative += oscillator.derivative_at(k0, order);
         }
 
         derivative

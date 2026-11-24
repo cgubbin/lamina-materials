@@ -142,6 +142,8 @@ macro_rules! rakic_ld_record {
         {
             /// Construct the Rakić et al. Lorentz–Drude material model.
             pub fn model(&self) -> DrudeLorentz<R> {
+                // Fitted energies in eV: platinum's 3.141 eV is data, not an approximation of pi.
+                #[allow(clippy::approx_constant)]
                 const OSCILLATORS: &[OscillatorParameters] = &[
                     $(
                         OscillatorParameters {
