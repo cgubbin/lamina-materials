@@ -1,271 +1,44 @@
-# Rust Project
-
-## Overview
-
-This template provides a modern Rust development environment using:
-
-- **Nix flakes** for reproducibility
-- **Fenix** for a consistent Rust toolchain
-- **Crane** for Nix-native Cargo builds and checks
-- **Cargo** for standard Rust workflows
-- **just** for ergonomic command execution
-
-It includes:
-
-- a **library target** (`src/lib.rs`)
-- a **binary target** (`src/main.rs`)
-- a **CLI interface** using `clap`
-- common tooling for testing, linting, coverage, and benchmarking
-
----
-
-## Tooling Architecture
-
-This template intentionally separates concerns:
-
-### Toolchain (Fenix)
-
-Provides:
-
-- `rustc`
-- `cargo`
-- `clippy`
-- `rustfmt`
-- `rust-analyzer`
-
-This is the **single source of truth** for Rust tooling.
-
----
-
-### Build System (Cargo)
-
-Used for:
-
-- building (`cargo build`)
-- running (`cargo run`)
-- testing (`cargo test`)
-- benchmarking (`cargo bench`)
-
----
-
-### Nix Integration (Crane)
-
-Used for:
-
-- reproducible builds (`nix build`)
-- CI-style checks (`nix flake check`)
-
-Crane ensures:
-
-- consistent builds across machines
-- dependency caching
-- integration with Nix CI pipelines
-
----
-
-### Task Runner (`just`)
-
-Provides:
-
-- short, memorable commands
-- a unified developer interface
-
----
-
-## Getting Started
-
-Enter the development shell:
-
-    nix develop
-
-Or enable automatic loading:
-
-    direnv allow
-
-Verify setup:
-
-    just init
-
-Run the application:
-
-    just run
-
----
-
-## Project Layout
-
-    .
-    ├── flake.nix
-    ├── justfile
-    ├── Cargo.toml
-    ├── rust-toolchain.toml
-    ├── .cargo/
-    ├── src/
-    │   ├── lib.rs
-    │   ├── main.rs
-    │   └── cli.rs
-    ├── tests/
-    ├── benches/
-    └── .config/
-
-- `lib.rs` — reusable library logic
-- `main.rs` — application entrypoint
-- `cli.rs` — command-line interface
-- `tests/` — integration tests
-- `benches/` — Criterion benchmarks
-
----
-
-## Common Workflows
-
-### Run the application
-
-    just run
-
-Pass CLI arguments:
-
-    just run --name Alice
-
-JSON output:
-
-    just run-json Alice
-
----
-
-### Development loop
-
-    just check
-    just test
-    just run
-
----
-
-### Formatting and linting
-
-Format code:
-
-    just fmt
-
-Check formatting:
-
-    just fmt-check
-
-Run clippy:
-
-    just lint
-
----
-
-### Testing
-
-Run standard tests:
-
-    just test
-
-Run nextest (faster):
-
-    just nextest
-
----
-
-### Benchmarking
-
-    just bench
-
----
-
-### Coverage
-
-Run coverage:
-
-    just coverage
-
-If this fails on your platform:
-
-    just coverage-llvm
-
-Note:
-
-- Default Tarpaulin backend uses `ptrace` (Linux x86_64 only)
-- LLVM backend works more broadly
-
----
-
-## Nix-Based Workflows
-
-### Build with Nix (Crane)
-
-    nix build
-
-This builds the crate in a fully reproducible environment.
-
----
-
-### Run all checks
-
-    nix flake check
-
-This runs:
-
-- build
-- clippy
-- tests
-- docs
-- formatting checks
-
-This is equivalent to a CI pipeline.
-
----
-
-### When to use Cargo vs Nix
-
-| Task                | Tool     |
-|--------------------|----------|
-| Fast iteration     | Cargo    |
-| CI / reproducible  | Nix/Crane |
-| Developer commands | just     |
-
----
-
-## CLI Example
-
-    just run --name Alice
-    Hello, Alice!
-
-    just run-json Alice
-    {"message":"Hello, Alice!"}
-
----
-
-## Reproducibility
-
-- `flake.lock` pins:
-  - Rust toolchain (via Fenix)
-  - system dependencies
-- `Cargo.lock` pins crate versions
-- Crane ensures consistent builds across machines
-
----
-
-## Philosophy
-
-- **Fenix defines the toolchain**
-- **Cargo is the source of truth for builds**
-- **Crane integrates Cargo into Nix**
-- **just provides ergonomics**
-
-Each tool has a single, clear responsibility.
-
----
-
-## Next Steps
-
-Typical extensions:
-
-- add subcommands via `clap`
-- introduce structured logging (`tracing`)
-- split into multiple crates (workspace)
-- add external dependencies via `pkg-config` + Nix
-- integrate CI using `nix flake check`
-
----
+# lamina-materials
+
+Optical material models for planar multilayer calculations.
+
+`lamina-materials` implements the material capability traits defined by
+`lamina-core`, so a stack can evaluate permittivity and permeability, and their
+spectral derivatives, on the real axis or in the complex plane.
+
+## What it provides
+
+- **Analytic models:** `Drude`, `Lorentz`, `DrudeLorentz`, `Sellmeier` and
+  `Cauchy`. They are meromorphic in the spectral coordinate, so they support
+  complex-frequency evaluation and analytic derivatives.
+- **Tabulated data:** `Tabulated` interpolates measured optical constants on the
+  real axis only. A real-axis interpolation defines no physical complex
+  continuation, so tabulated materials don't implement the complex-plane traits.
+- **A small curated set of named parameterisations** in `database`: vacuum, air,
+  fused silica, silicon and germanium (Frey 2006), Rakić 1998 metals and polar
+  dielectrics. Each record states its reference, parameter convention, valid
+  spectral interval and units, for examples and tests.
+
+Material evaluation uses vacuum angular wavenumber `k₀ = 2π/λ₀` in `cm⁻¹` as its
+canonical spectral coordinate. Constructors accept typed spectral quantities
+from `lamina-units` and convert them before validation.
+
+## Scope
+
+lamina-materials provides constitutive models for planar multilayers: Drude, Lorentz, Drude–Lorentz,
+Sellmeier, Cauchy and tabulated optical constants. Each model evaluates its permittivity and permeability, and
+their spectral derivatives, on the real axis or, where the model defines one, in the complex plane, with
+validation and a stated validity domain. The Sellmeier model also gives the rates of its permittivity with
+respect to its own parameters.
+
+## Family
+
+```text
+lamina-units       typed quantities and units
+lamina-core        stacks, transfer and scattering matrices, fields
+lamina-materials   material models implementing lamina-core's material traits (this crate)
+lamina-mode        modes of planar multilayers, with numerical evidence
+```
+
+The crates are versioned together until 1.0; each changelog names the
+conventions a release changes.
