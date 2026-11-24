@@ -25,5 +25,5 @@ pub use error::{MaterialModelError, TabulatedMaterialError};
 pub use metadata::{MaterialRecord, SpectralDomain};
 pub use model::{
     Cauchy, Drude, DrudeLorentz, Extrapolation, Lorentz, LorentzOscillator, Sellmeier,
-    SellmeierTerm, Tabulated,
+    SellmeierParameterRates, SellmeierTerm, Tabulated,
 };

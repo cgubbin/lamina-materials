@@ -16,5 +16,5 @@ pub use cauchy::Cauchy;
 pub use drude::Drude;
 pub use drude_lorentz::DrudeLorentz;
 pub use lorentz::{Lorentz, LorentzOscillator};
-pub use sellmeir::{Sellmeier, SellmeierTerm};
+pub use sellmeir::{Sellmeier, SellmeierParameterRates, SellmeierTerm};
 pub use tabulated::{Extrapolation, Tabulated};

@@ -122,6 +122,18 @@ where
     }
 }
 
+/// Rates of a Sellmeier permittivity with respect to its parameters at one
+/// vacuum angular wavenumber. See [`Sellmeier::permittivity_parameter_rates`].
+#[derive(Clone, Debug, PartialEq)]
+pub struct SellmeierParameterRates<R> {
+    /// `∂ε/∂A`, dimensionless.
+    pub constant: R,
+    /// `∂ε/∂Bⱼ`, dimensionless, in term order.
+    pub coefficients: Vec<R>,
+    /// `∂ε/∂qⱼ`, in `cm` (per `cm⁻¹` of pole wavenumber), in term order.
+    pub pole_wavenumbers: Vec<R>,
+}
+
 /// Sellmeier relative-permittivity model.
 ///
 /// The canonical form is
@@ -159,6 +171,37 @@ where
     /// Return the Sellmeier terms.
     pub fn terms(&self) -> &[SellmeierTerm<R>] {
         &self.terms
+    }
+
+    /// Rates of the relative permittivity with respect to each model
+    /// parameter, at a fixed real vacuum angular wavenumber `k0` in `cm⁻¹`.
+    ///
+    /// For `ε = A + Σ Bⱼ qⱼ² / (qⱼ² - k₀²)`:
+    ///
+    /// - `∂ε/∂A = 1`;
+    /// - `∂ε/∂Bⱼ = qⱼ² / (qⱼ² - k₀²)`;
+    /// - `∂ε/∂qⱼ = -2 Bⱼ qⱼ k₀² / (qⱼ² - k₀²)²`, per `cm⁻¹` of pole wavenumber.
+    ///
+    /// The model has no permeability parameters. These rates let a consumer
+    /// differentiate a modal quantity with respect to a fitted parameter
+    /// through the stack's constitutive rates.
+    pub fn permittivity_parameter_rates(&self, k0: R) -> SellmeierParameterRates<R> {
+        let k2 = k0 * k0;
+        let (coefficients, pole_wavenumbers) = self
+            .terms
+            .iter()
+            .map(|term| {
+                let q = term.pole_wavenumber;
+                let gap = q * q - k2;
+                let two = R::one() + R::one();
+                (q * q / gap, -two * term.coefficient * q * k2 / (gap * gap))
+            })
+            .unzip();
+        SellmeierParameterRates {
+            constant: R::one(),
+            coefficients,
+            pole_wavenumbers,
+        }
     }
 
     fn relative_permittivity_at<C>(&self, k0: C) -> C
@@ -283,6 +326,40 @@ where
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn parameter_rates_match_finite_differences() {
+        use lamina_units::Wavelength;
+        let terms = |b1: f64, q1: f64| {
+            vec![
+                SellmeierTerm::new(
+                    b1,
+                    lamina_units::VacuumAngularWavenumber::inverse_centimetres(q1),
+                )
+                .unwrap(),
+                SellmeierTerm::from_wavelength_pole(0.4, Wavelength::micrometres(9.0)).unwrap(),
+            ]
+        };
+        let (a, b1, q1, k0) = (1.2, 0.7, 1.0e5, 4.0e4);
+        let eps = |a: f64, b1: f64, q1: f64| {
+            Sellmeier::new(a, terms(b1, q1))
+                .unwrap()
+                .relative_permittivity_at(num_complex::Complex64::new(k0, 0.))
+                .re
+        };
+        let rates = Sellmeier::new(a, terms(b1, q1))
+            .unwrap()
+            .permittivity_parameter_rates(k0);
+        let central = |f: &dyn Fn(f64) -> f64, x: f64| {
+            let h = 1e-5 * x.abs().max(1.0);
+            (f(x + h) - f(x - h)) / (2. * h)
+        };
+        assert!((rates.constant - central(&|x| eps(x, b1, q1), a)).abs() < 1e-8);
+        assert!((rates.coefficients[0] - central(&|x| eps(a, x, q1), b1)).abs() < 1e-8);
+        let dq = central(&|x| eps(a, b1, x), q1);
+        assert!((rates.pole_wavenumbers[0] - dq).abs() < 1e-8 * dq.abs());
+        assert_eq!(rates.coefficients.len(), 2);
+    }
     use super::*;
 
     use approx::assert_relative_eq;
