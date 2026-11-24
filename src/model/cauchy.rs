@@ -165,7 +165,7 @@ where
                 for (index, &coefficient) in self.coefficients.iter().enumerate().skip(1) {
                     let index_r = R::from(index).expect("usize converts to float");
 
-                    dn_dx = dn_dx + C::from_real(coefficient * index_r) * powi(x, index - 1);
+                    dn_dx += C::from_real(coefficient * index_r) * powi(x, index - 1);
                 }
 
                 two * k0 * dn_dx
@@ -178,12 +178,11 @@ where
                 for (index, &coefficient) in self.coefficients.iter().enumerate().skip(1) {
                     let index_r = R::from(index).expect("usize converts to float");
 
-                    dn_dx = dn_dx + C::from_real(coefficient * index_r) * powi(x, index - 1);
+                    dn_dx += C::from_real(coefficient * index_r) * powi(x, index - 1);
 
                     if index >= 2 {
-                        d2n_dx2 = d2n_dx2
-                            + C::from_real(coefficient * index_r * (index_r - one))
-                                * powi(x, index - 2);
+                        d2n_dx2 += C::from_real(coefficient * index_r * (index_r - one))
+                            * powi(x, index - 2);
                     }
                 }
 
@@ -197,15 +196,13 @@ where
                 for (index, &coefficient) in self.coefficients.iter().enumerate().skip(2) {
                     let index_r = R::from(index).expect("usize converts to float");
 
-                    d2n_dx2 = d2n_dx2
-                        + C::from_real(coefficient * index_r * (index_r - one))
-                            * powi(x, index - 2);
+                    d2n_dx2 +=
+                        C::from_real(coefficient * index_r * (index_r - one)) * powi(x, index - 2);
 
                     if index >= 3 {
-                        d3n_dx3 = d3n_dx3
-                            + C::from_real(
-                                coefficient * index_r * (index_r - one) * (index_r - two_r),
-                            ) * powi(x, index - 3);
+                        d3n_dx3 += C::from_real(
+                            coefficient * index_r * (index_r - one) * (index_r - two_r),
+                        ) * powi(x, index - 3);
                     }
                 }
 
