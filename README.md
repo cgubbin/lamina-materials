@@ -17,25 +17,19 @@ spectral derivatives, on the real axis or in the complex plane.
 - **A small curated set of named parameterisations** in `database`: vacuum, air,
   fused silica, silicon and germanium (Frey 2006), Rakić 1998 metals and polar
   dielectrics. Each record states its reference, parameter convention, valid
-  spectral interval and units. It is a convenience for examples and tests, not
-  an optical-constants database.
+  spectral interval and units, for examples and tests.
 
 Material evaluation uses vacuum angular wavenumber `k₀ = 2π/λ₀` in `cm⁻¹` as its
 canonical spectral coordinate. Constructors accept typed spectral quantities
 from `lamina-units` and convert them before validation.
 
-## Boundary
+## Scope
 
-| lamina-materials owns | lamina-materials never owns |
-| --- | --- |
-| Constitutive models and their validation | Layer stacks and matrix methods (`lamina-core`) |
-| Spectral derivatives of ε and μ | Units and spectral quantities (`lamina-units`) |
-| Validity domains and literature identity of named records | Mode searches and fields (`lamina-mode`) |
-| A small set of documented reference parameterisations | Comprehensive material databases, foundry or process data |
-
-Consumers supply the parameters of the materials they model. A change that
-turns this crate into a material database, or makes it depend on a solver,
-crosses the boundary.
+lamina-materials provides constitutive models for planar multilayers: Drude, Lorentz, Drude–Lorentz,
+Sellmeier, Cauchy and tabulated optical constants. Each model evaluates its permittivity and permeability, and
+their spectral derivatives, on the real axis or, where the model defines one, in the complex plane, with
+validation and a stated validity domain. The Sellmeier model also gives the rates of its permittivity with
+respect to its own parameters.
 
 ## Family
 
