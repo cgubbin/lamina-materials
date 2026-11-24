@@ -42,7 +42,7 @@ fn heterogeneous_real_axis_handles_share_one_type() {
         .unwrap(),
     );
 
-    let materials = vec![drude, tabulated];
+    let materials = [drude, tabulated];
 
     assert_eq!(materials.len(), 2);
 }
