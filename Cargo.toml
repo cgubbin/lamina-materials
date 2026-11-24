@@ -3,8 +3,14 @@ name = "lamina-materials"
 version = "0.1.0"
 edition = "2024"
 rust-version = "1.85"
-description = "Materials library for the lamina ecosystem"
-license = "MIT"
+description = "Dispersive optical material models for planar multilayer calculations"
+license = "MIT OR Apache-2.0"
+authors = ["Christopher R. Gubbin <cgubbin@gmail.com>"]
+repository = "https://github.com/cgubbin/lamina-materials"
+readme = "README.md"
+keywords = ["optics", "photonics", "permittivity", "dispersion", "materials"]
+categories = ["science", "mathematics"]
+include = ["src/**/*.rs", "tests/**/*.rs", "Cargo.toml", "README.md", "CHANGELOG.md", "LICENSE*"]
 
 [lib]
 name = "lamina_materials"
@@ -16,8 +22,8 @@ ndarray = "0.17.2"
 num-complex = "0.4.6"
 num-traits = "0.2.19"
 thiserror = "2.0.18"
-lamina-core = { path = "../lamina-core" }
-lamina-units = { path = "../lamina-units" }
+lamina-core = { version = "0.1.0", path = "../lamina-core" }
+lamina-units = { version = "0.1.0", path = "../lamina-units" }
 
 [dev-dependencies]
 approx = "0.5.1"
