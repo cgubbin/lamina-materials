@@ -21,9 +21,10 @@ pub mod error;
 pub mod metadata;
 pub mod model;
 
-pub use error::{MaterialModelError, TabulatedMaterialError};
+pub use error::{ConstantTensorError, MaterialModelError, TabulatedMaterialError};
 pub use metadata::{MaterialRecord, SpectralDomain};
 pub use model::{
-    Cauchy, Drude, DrudeLorentz, Extrapolation, Lorentz, LorentzOscillator, Sellmeier,
-    SellmeierParameterRates, SellmeierTerm, Tabulated,
+    Cauchy, ConstantTensor, CrystalAxis, Drude, DrudeLorentz, Extrapolation, Lorentz,
+    LorentzOscillator, PrincipalAxes, PrincipalModel, Sellmeier, SellmeierAxes,
+    SellmeierParameterRates, SellmeierTerm, Tabulated, TensorParameter, TensorRate,
 };
