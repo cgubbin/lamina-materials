@@ -269,12 +269,13 @@ fn outside_the_table_a_rejecting_axis_is_a_non_finite_layer() {
     }
 }
 
-/// lamina-core validates the stack-frame tensors of oriented regions only: a
-/// scalar region off the table is not refused by name. The scattering-matrix
-/// backend returns a NaN response and the transfer-matrix backend refuses a
-/// non-finite final matrix.
+/// A scalar region off the table is refused by name, as an oriented one is:
+/// lamina-core validates the ε and μ of every region, whatever its class.
 #[test]
-fn outside_the_table_a_rejecting_scalar_layer_gives_no_finite_response() {
+fn outside_the_table_a_rejecting_scalar_layer_is_a_non_finite_layer() {
+    let expected = ConstitutiveError::NonFinite {
+        region: StackRegion::Layer(FiniteLayerIndex::new(0)),
+    };
     let stack: MaterialStack<Complex64> = Stack::from_materials(
         Sellmeier::new(1.0, Vec::new()).unwrap(),
         sellmeier(CLADDING),
@@ -283,34 +284,16 @@ fn outside_the_table_a_rejecting_scalar_layer_gives_no_finite_response() {
     .finalise();
     for k0 in BEYOND {
         for polarisation in POLARISATIONS {
-            let response = RealAxisEvaluator::new(Scatter2::new())
-                .evaluate(input(&[k0]), &stack, polarisation)
-                .unwrap();
-            for side in [IncidentSide::Left, IncidentSide::Right] {
-                let amplitudes = response.amplitudes(side).unwrap();
-                assert!(
-                    amplitudes
-                        .reflection()
-                        .iter()
-                        .chain(amplitudes.transmission())
-                        .all(|value| value.re.is_nan()),
-                    "{k0} {polarisation:?} {side:?}"
+            for_each_backend!(evaluator, {
+                let error = evaluator
+                    .evaluate(input(&[k0]), &stack, polarisation)
+                    .unwrap_err();
+                assert_eq!(
+                    constitutive_error(&error),
+                    Some(expected),
+                    "{k0} {polarisation:?}: {error}"
                 );
-            }
-
-            let error = RealAxisEvaluator::new(Transfer2::new())
-                .evaluate(input(&[k0]), &stack, polarisation)
-                .unwrap_err();
-            let mut source = Some(&error as &(dyn Error + 'static));
-            let mut transfer = None;
-            while let Some(error) = source {
-                transfer = transfer.or(error.downcast_ref::<Transfer2Error>());
-                source = error.source();
-            }
-            assert!(
-                matches!(transfer, Some(Transfer2Error::NonFiniteFinalMatrix { .. })),
-                "{k0} {polarisation:?}: {error}"
-            );
+            });
         }
     }
 }
