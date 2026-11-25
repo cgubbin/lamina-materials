@@ -46,8 +46,32 @@ fn permittivity(table: &Tabulated<f64>, k0: f64) -> Complex64 {
 }
 
 #[test]
+fn reject_matches_the_other_policies_inside_the_table() {
+    let reject = table(Extrapolation::Reject);
+    // Endpoints are inside the table.
+    for k0 in [1.0, 1.5, 2.0, 3.0, 4.0] {
+        let epsilon = permittivity(&reject, k0);
+        assert_eq!(epsilon, permittivity(&table(Extrapolation::Clamp), k0));
+        assert_eq!(epsilon, permittivity(&table(Extrapolation::Linear), k0));
+    }
+}
+
+#[test]
+fn reject_gives_nan_outside_the_table() {
+    let reject = table(Extrapolation::Reject);
+    for k0 in [0.0, 1.0 - 1e-12, 4.0 + 1e-12, 5.0, f64::INFINITY] {
+        let epsilon = permittivity(&reject, k0);
+        assert!(epsilon.re.is_nan() && epsilon.im.is_nan(), "k0 = {k0}");
+    }
+}
+
+#[test]
 fn a_nan_wavenumber_gives_nan_under_every_policy() {
-    for extrapolation in [Extrapolation::Clamp, Extrapolation::Linear] {
+    for extrapolation in [
+        Extrapolation::Clamp,
+        Extrapolation::Linear,
+        Extrapolation::Reject,
+    ] {
         let epsilon = permittivity(&table(extrapolation), f64::NAN);
         assert!(
             epsilon.re.is_nan() && epsilon.im.is_nan(),
