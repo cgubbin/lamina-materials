@@ -1,7 +1,7 @@
 use approx::assert_relative_eq;
 use lamina_core::{Material, Scalar};
 use lamina_materials::{Extrapolation, Tabulated};
-use ndarray::array;
+use ndarray::{array, s};
 use num_complex::Complex64;
 
 fn table(extrapolation: Extrapolation) -> Tabulated<f64> {
@@ -39,4 +39,36 @@ fn linear_extrapolation_continues_endpoint_segment() {
 
     assert_relative_eq!(epsilon.re, 0.0);
     assert_relative_eq!(epsilon.im, -0.1);
+}
+
+fn permittivity(table: &Tabulated<f64>, k0: f64) -> Complex64 {
+    table.relative_permittivity::<_, Complex64>(Scalar(k0))
+}
+
+#[test]
+fn a_nan_wavenumber_gives_nan_under_every_policy() {
+    for extrapolation in [Extrapolation::Clamp, Extrapolation::Linear] {
+        let epsilon = permittivity(&table(extrapolation), f64::NAN);
+        assert!(
+            epsilon.re.is_nan() && epsilon.im.is_nan(),
+            "{extrapolation:?}"
+        );
+    }
+}
+
+#[test]
+fn a_strided_table_interpolates() {
+    let coordinates = array![1.0, 0.0, 2.0, 0.0, 4.0].slice_move(s![..;2]);
+    assert!(coordinates.as_slice().is_none());
+    let strided = Tabulated::new(
+        coordinates,
+        table(Extrapolation::Clamp).values().clone(),
+        Extrapolation::Clamp,
+    )
+    .unwrap();
+
+    assert_eq!(
+        permittivity(&strided, 3.0),
+        permittivity(&table(Extrapolation::Clamp), 3.0)
+    );
 }

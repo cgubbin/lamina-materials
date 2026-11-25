@@ -18,6 +18,11 @@ Added:
   extraordinary one, one entry for a biaxial axis), and unit rates for each
   constant-tensor component.
 
+Fixed:
+
+- `Tabulated` no longer panics at a NaN wavenumber (the permittivity is NaN) or
+  on a table given in a non-contiguous array.
+
 ## 0.1.0 (unreleased)
 
 First release on crates.io.

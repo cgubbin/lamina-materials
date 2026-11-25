@@ -89,7 +89,8 @@ where
         }
 
         Ok(Self {
-            vacuum_angular_wavenumber,
+            // Contiguous storage lets lookup search the coordinates as a slice.
+            vacuum_angular_wavenumber: vacuum_angular_wavenumber.as_standard_layout().into_owned(),
             relative_permittivity,
             extrapolation,
         })
@@ -111,6 +112,10 @@ where
     }
 
     fn interpolate(&self, x: R) -> Complex<R> {
+        if x.is_nan() {
+            return Complex::new(R::nan(), R::nan());
+        }
+
         let last = self.vacuum_angular_wavenumber.len() - 1;
 
         if x <= self.vacuum_angular_wavenumber[0] {
