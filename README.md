@@ -11,6 +11,14 @@ spectral derivatives, on the real axis or in the complex plane.
 - **Analytic models:** `Drude`, `Lorentz`, `DrudeLorentz`, `Sellmeier` and
   `Cauchy`. They are meromorphic in the spectral coordinate, so they support
   complex-frequency evaluation and analytic derivatives.
+- **Anisotropic models:** `PrincipalAxes` describes a birefringent medium by one
+  scalar model per principal axis, `ε = diag(ε_a, ε_b, ε_c)` in the crystal frame,
+  with `uniaxial` (ordinary on a and b, extraordinary on the optic axis c) and
+  `biaxial` constructors. It has each capability that all three axis models have,
+  so a tabulated axis makes it real-axis only. `ConstantTensor` holds constant
+  complex 3×3 permittivity and permeability tensors. Both report the rates of
+  their permittivity tensor with respect to their own parameters. Orientation is
+  applied by a rotation from `lamina-core`; the crate holds no crystal data.
 - **Tabulated data:** `Tabulated` interpolates measured optical constants on the
   real axis only. A real-axis interpolation defines no physical complex
   continuation, so tabulated materials don't implement the complex-plane traits.
@@ -28,8 +36,9 @@ from `lamina-units` and convert them before validation.
 lamina-materials provides constitutive models for planar multilayers: Drude, Lorentz, Drude–Lorentz,
 Sellmeier, Cauchy and tabulated optical constants. Each model evaluates its permittivity and permeability, and
 their spectral derivatives, on the real axis or, where the model defines one, in the complex plane, with
-validation and a stated validity domain. The Sellmeier model also gives the rates of its permittivity with
-respect to its own parameters.
+validation and a stated validity domain. Anisotropic media are built from these as principal-axis tensors in
+the crystal frame, or given as constant tensors. The Sellmeier model and the tensor models also give the rates of
+their permittivity with respect to their own parameters.
 
 ## Family
 

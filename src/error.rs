@@ -1,5 +1,6 @@
 //! Construction and validation errors.
 
+use crate::CrystalAxis;
 use std::fmt::Debug;
 
 /// Validation errors shared by analytical models.
@@ -92,5 +93,27 @@ where
         right: R,
         /// Invalid coordinate index.
         right_index: usize,
+    },
+}
+
+/// Validation errors for constant tensor models.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, thiserror::Error)]
+pub enum ConstantTensorError {
+    /// An entry has a non-finite component.
+    #[error("{quantity} entry ({row:?}, {column:?}) must be finite")]
+    NonFiniteEntry {
+        /// `permittivity` or `permeability`.
+        quantity: &'static str,
+        /// Entry row.
+        row: CrystalAxis,
+        /// Entry column.
+        column: CrystalAxis,
+    },
+
+    /// The cc component vanishes.
+    #[error("{quantity} cc component must be nonzero")]
+    ZeroCcComponent {
+        /// `permittivity` or `permeability`.
+        quantity: &'static str,
     },
 }
