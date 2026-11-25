@@ -16,6 +16,17 @@ pub enum Extrapolation {
 
     /// Continue the nearest linear segment.
     Linear,
+
+    /// Refuse evaluation outside the table: the permittivity is NaN there.
+    ///
+    /// The table endpoints are inside the table. A NaN permittivity is how a
+    /// material reports a point outside its domain: lamina-core refuses an
+    /// oriented tensor region with a non-finite entry with
+    /// `ConstitutiveError::NonFinite` naming that region. A scalar region is
+    /// not refused by name; its response is non-finite. This is the safe
+    /// choice when the table spans the spectral range of interest and any
+    /// evaluation outside it is a mistake.
+    Reject,
 }
 
 /// Piecewise-linear tabulated relative-permittivity model.
@@ -89,7 +100,8 @@ where
         }
 
         Ok(Self {
-            vacuum_angular_wavenumber,
+            // Contiguous storage lets lookup search the coordinates as a slice.
+            vacuum_angular_wavenumber: vacuum_angular_wavenumber.as_standard_layout().into_owned(),
             relative_permittivity,
             extrapolation,
         })
@@ -111,18 +123,27 @@ where
     }
 
     fn interpolate(&self, x: R) -> Complex<R> {
+        if x.is_nan() {
+            return Complex::new(R::nan(), R::nan());
+        }
+
         let last = self.vacuum_angular_wavenumber.len() - 1;
 
-        if x <= self.vacuum_angular_wavenumber[0] {
+        let first = self.vacuum_angular_wavenumber[0];
+        let end = self.vacuum_angular_wavenumber[last];
+
+        if x <= first {
             return match self.extrapolation {
-                Extrapolation::Clamp => self.relative_permittivity[0],
+                Extrapolation::Reject if x < first => Complex::new(R::nan(), R::nan()),
+                Extrapolation::Clamp | Extrapolation::Reject => self.relative_permittivity[0],
                 Extrapolation::Linear => self.interpolate_segment(0, x),
             };
         }
 
-        if x >= self.vacuum_angular_wavenumber[last] {
+        if x >= end {
             return match self.extrapolation {
-                Extrapolation::Clamp => self.relative_permittivity[last],
+                Extrapolation::Reject if x > end => Complex::new(R::nan(), R::nan()),
+                Extrapolation::Clamp | Extrapolation::Reject => self.relative_permittivity[last],
                 Extrapolation::Linear => self.interpolate_segment(last - 1, x),
             };
         }

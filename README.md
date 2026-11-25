@@ -22,6 +22,11 @@ spectral derivatives, on the real axis or in the complex plane.
 - **Tabulated data:** `Tabulated` interpolates measured optical constants on the
   real axis only. A real-axis interpolation defines no physical complex
   continuation, so tabulated materials don't implement the complex-plane traits.
+  Outside the table (endpoints are inside it) the permittivity is the nearest
+  endpoint value (`Clamp`), the nearest segment continued (`Linear`), or NaN
+  (`Reject`). `Reject` is the safe choice when the table should cover every
+  evaluated wavenumber: lamina-core refuses an oriented tensor region with a
+  non-finite entry with a typed error naming the region.
 - **A small curated set of named parameterisations** in `database`: vacuum, air,
   fused silica, silicon and germanium (Frey 2006), Rakić 1998 metals and polar
   dielectrics. Each record states its reference, parameter convention, valid

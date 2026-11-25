@@ -17,6 +17,18 @@ Added:
   (`diag(∂ε_o, ∂ε_o, 0)` for an ordinary parameter, `diag(0, 0, ∂ε_e)` for an
   extraordinary one, one entry for a biaxial axis), and unit rates for each
   constant-tensor component.
+- `Extrapolation::Reject`: a tabulated permittivity is NaN outside its table
+  (the endpoints are inside it) and identical to `Clamp` and `Linear` inside.
+  lamina-core refuses an oriented tensor region with such an entry with
+  `ConstitutiveError::NonFinite` naming the region; a scalar region is not yet
+  refused by name (the scattering-matrix backend returns a NaN response, the
+  transfer-matrix backend a non-finite matrix error). `Extrapolation` gains a
+  variant, so exhaustive matches on it need a new arm.
+
+Fixed:
+
+- `Tabulated` no longer panics at a NaN wavenumber (the permittivity is NaN) or
+  on a table given in a non-contiguous array.
 
 ## 0.1.0 (unreleased)
 
