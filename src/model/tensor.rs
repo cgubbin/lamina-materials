@@ -9,8 +9,8 @@ use crate::{ConstantTensorError, Sellmeier};
 use lamina_core::{
     ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
     DifferentiableMeromorphicTensorMaterial, DifferentiableTensorMaterial, Material,
-    MeromorphicMaterial, MeromorphicTensorMaterial, Sampled, Scalar, TensorMaterial,
-    material::Tensor3,
+    MeromorphicMaterial, MeromorphicTensorMaterial, Sampled, Scalar, SpectralSingularity,
+    TensorMaterial, material::Tensor3,
 };
 use num_complex::Complex;
 use num_traits::{Float, One, Zero};
@@ -231,7 +231,33 @@ principal_axes!(DifferentiableTensorMaterial for DifferentiableMaterial, Self::R
     relative_permittivity_tensor_derivative => relative_permittivity_derivative(order);
     relative_permeability_tensor_derivative => relative_permeability_derivative(order);
 );
-principal_axes!(MeromorphicTensorMaterial for MeromorphicMaterial, C {}
+principal_axes!(MeromorphicTensorMaterial for MeromorphicMaterial, C {
+    /// Each axis model's declaration on its entry, the ordinary model's of a
+    /// uniaxial medium on a and b; nothing unless every axis model declares.
+    fn tensor_spectral_singularities<C>(&self) -> Option<Vec<SpectralSingularity<C>>>
+    where
+        C: ComplexScalar<RealField = Self::Real>,
+    {
+        let on = |points: Vec<SpectralSingularity<C>>, axes: &[usize]| {
+            axes.iter()
+                .flat_map(|&axis| points.iter().map(move |p| p.on_axis(axis)))
+                .collect::<Vec<_>>()
+        };
+        Some(match &self.axes {
+            Axes::Uniaxial { ordinary, extraordinary } => {
+                let mut points = on(ordinary.spectral_singularities()?, &[0, 1]);
+                points.extend(on(extraordinary.spectral_singularities()?, &[2]));
+                points
+            }
+            Axes::Biaxial { a, b, c } => {
+                let mut points = on(a.spectral_singularities()?, &[0]);
+                points.extend(on(b.spectral_singularities()?, &[1]));
+                points.extend(on(c.spectral_singularities()?, &[2]));
+                points
+            }
+        })
+    }
+}
     relative_permittivity_tensor_complex => relative_permittivity_complex;
     relative_permeability_tensor_complex => relative_permeability_complex;
 );

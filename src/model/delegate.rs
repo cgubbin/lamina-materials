@@ -60,6 +60,13 @@ macro_rules! delegate_analytical_material {
             {
                 self.inner.relative_permittivity_complex(vacuum_wavenumber)
             }
+
+            fn spectral_singularities<C>(&self) -> Option<Vec<lamina_core::SpectralSingularity<C>>>
+            where
+                C: lamina_core::ComplexScalar<RealField = R>,
+            {
+                self.inner.spectral_singularities()
+            }
         }
 
         impl<R> lamina_core::DifferentiableMeromorphicMaterial for $type<R>

@@ -7,6 +7,11 @@ released in step until 1.0. Each entry names any shared convention it changes.
 
 Added:
 
+- Declared spectral singularities: `Drude`, `Lorentz` and `DrudeLorentz`
+  declare every pole of ε and every zero (roots of its numerator polynomial,
+  polished on ε), and `PrincipalAxes` declares its axis models' points on
+  their entries when every axis model declares. Other models keep the
+  undeclared default.
 - `PrincipalAxes`: a tensor model diagonal in its crystal frame, with one scalar
   dispersion model per principal axis (`uniaxial`, `biaxial`). It implements each
   tensor capability shared by its three axis models.
