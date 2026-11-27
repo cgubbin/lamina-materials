@@ -9,6 +9,7 @@ mod delegate;
 mod drude;
 mod drude_lorentz;
 mod lorentz;
+mod rational;
 mod sellmeir;
 mod tabulated;
 mod tensor;

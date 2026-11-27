@@ -1,9 +1,16 @@
 //! Combined Drude–Lorentz model.
 
-use crate::{MaterialModelError, model::LorentzOscillator};
+use crate::{
+    MaterialModelError,
+    model::{
+        LorentzOscillator,
+        rational::{self, Term},
+    },
+};
 use lamina_core::{
-    ComplexScalar, DerivativeOrder, DifferentiableMaterial, DifferentiableMeromorphicMaterial,
-    Material, MeromorphicMaterial, Sampled,
+    ComplexScalar, ConstitutiveQuantity, DerivativeOrder, DifferentiableMaterial,
+    DifferentiableMeromorphicMaterial, Material, MeromorphicMaterial, Sampled, SingularityKind,
+    SpectralSingularity,
 };
 use lamina_units::{SpectralQuantity, VacuumAngularWavenumberSquared};
 use num_traits::{Float, FromPrimitive};
@@ -276,6 +283,50 @@ where
         I: Sampled<Elem = C>,
     {
         vacuum_angular_wavenumber.map(|k0| self.relative_permittivity_at(k0))
+    }
+
+    /// The poles of the Drude term (`k₀ = 0` and `−iΓᴅ`) and of each
+    /// oscillator (`k₀ = (−iΓⱼ ± √(4Ωⱼ² − Γⱼ²))/2`), and the zeros of ε: the
+    /// roots of its numerator polynomial, polished by Newton on ε. μ = 1 has
+    /// none. Nothing is declared if ε vanishes identically.
+    fn spectral_singularities<C>(&self) -> Option<Vec<SpectralSingularity<C>>>
+    where
+        C: ComplexScalar<RealField = R>,
+    {
+        let real = C::from_real;
+        let mut terms = Vec::new();
+        if self.drude_strength > R::zero() {
+            terms.push(Term {
+                numerator: real(-self.drude_strength),
+                denominator: [C::zero(), C::i() * real(self.drude_damping)],
+            });
+        }
+        for oscillator in &self.oscillators {
+            let resonance = oscillator.resonance();
+            terms.push(Term {
+                numerator: real(-oscillator.strength()),
+                denominator: [
+                    real(-resonance * resonance),
+                    C::i() * real(oscillator.damping()),
+                ],
+            });
+        }
+        let (poles, zeros) = rational::poles_and_zeros(self.epsilon_infinity, &terms, |k| {
+            (
+                self.relative_permittivity_at(k),
+                self.derivative_at(k, DerivativeOrder::First),
+            )
+        })?;
+        let declare = |kind| {
+            move |k0| SpectralSingularity::scalar(k0, kind, ConstitutiveQuantity::Permittivity)
+        };
+        Some(
+            poles
+                .into_iter()
+                .map(declare(SingularityKind::Pole))
+                .chain(zeros.into_iter().map(declare(SingularityKind::Zero)))
+                .collect(),
+        )
     }
 }
 
